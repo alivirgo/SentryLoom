@@ -4,6 +4,7 @@ import dgram from "node:dgram";
 import fs from "node:fs/promises";
 import { createWriteStream } from "node:fs";
 import crypto from "node:crypto";
+import os from "node:os";
 import path from "node:path";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -17,6 +18,38 @@ import { appPaths } from "../constants.js";
 import { ensureDirectory } from "./fs-safe.js";
 
 const DISCOVERY_REQUEST = "SENTRYLOOM_HQ_DISCOVER_V1";
+
+function ipv4ToInteger(value) {
+  const octets = String(value || "").split(".").map(Number);
+  if (octets.length !== 4 || octets.some((octet) =>
+    !Number.isInteger(octet) || octet < 0 || octet > 255)) return null;
+  return octets.reduce((result, octet) => ((result << 8) | octet) >>> 0, 0);
+}
+
+function integerToIpv4(value) {
+  const normalized = value >>> 0;
+  return [
+    (normalized >>> 24) & 255,
+    (normalized >>> 16) & 255,
+    (normalized >>> 8) & 255,
+    normalized & 255
+  ].join(".");
+}
+
+export function hqDiscoveryBroadcastAddresses(interfaces = os.networkInterfaces()) {
+  const addresses = new Set(["255.255.255.255", "127.0.0.1"]);
+  for (const entries of Object.values(interfaces || {})) {
+    for (const entry of entries || []) {
+      if ((entry.family !== "IPv4" && entry.family !== 4) || entry.internal) continue;
+      const address = ipv4ToInteger(entry.address);
+      const netmask = ipv4ToInteger(entry.netmask);
+      if (address === null || netmask === null) continue;
+      addresses.add(integerToIpv4(((address & netmask) | (~netmask >>> 0)) >>> 0));
+    }
+  }
+  return [...addresses];
+}
+
 export function normalizeFingerprint(value) {
   const normalized = String(value || "").replace(/[^a-f0-9]/gi, "").toUpperCase();
   if (normalized && !/^[A-F0-9]{64}$/.test(normalized)) {
@@ -237,16 +270,25 @@ export async function downloadHqPackage(credentials, route, destination, expecte
 }
 
 export async function discoverHqServers(options = {}) {
-  const timeoutMs = Math.max(250, Number(options.timeoutMs) || 1600);
+  const timeoutMs = Math.max(500, Number(options.timeoutMs) || 2400);
   const port = Number(options.port) || 32110;
-  const socket = dgram.createSocket("udp4");
+  const socket = dgram.createSocket({ type: "udp4", reuseAddr: true });
   const servers = new Map();
   return new Promise((resolve, reject) => {
+    let finished = false;
+    const timers = [];
     const finish = () => {
+      if (finished) return;
+      finished = true;
+      for (const timer of timers) clearTimeout(timer);
       try { socket.close(); } catch {}
-      resolve([...servers.values()]);
+      resolve([...servers.values()].sort((left, right) =>
+        left.name.localeCompare(right.name) || left.address.localeCompare(right.address)));
     };
     socket.on("error", (error) => {
+      if (finished) return;
+      finished = true;
+      for (const timer of timers) clearTimeout(timer);
       try { socket.close(); } catch {}
       reject(error);
     });
@@ -272,9 +314,18 @@ export async function discoverHqServers(options = {}) {
     socket.bind(0, "0.0.0.0", () => {
       socket.setBroadcast(true);
       const request = Buffer.from(DISCOVERY_REQUEST);
-      socket.send(request, port, "255.255.255.255");
-      socket.send(request, port, "127.0.0.1");
-      setTimeout(finish, timeoutMs);
+      const targets = options.broadcastAddresses ||
+        hqDiscoveryBroadcastAddresses(options.networkInterfaces);
+      const sendDiscovery = () => {
+        if (finished) return;
+        for (const target of targets) {
+          socket.send(request, port, target, () => {});
+        }
+      };
+      sendDiscovery();
+      timers.push(setTimeout(sendDiscovery, Math.floor(timeoutMs / 3)));
+      timers.push(setTimeout(sendDiscovery, Math.floor(timeoutMs * 2 / 3)));
+      timers.push(setTimeout(finish, timeoutMs));
     });
   });
 }
@@ -393,6 +444,87 @@ export async function pollHqEnrollment(pending) {
     await savePendingHqEnrollment({ ...pending, status: "rejected" });
   }
   return { status: response.body.status };
+}
+
+export async function authorizeHqMaintenance(credentials, password, action, options = {}) {
+  if (!credentials) throw new Error("This endpoint is not enrolled with SentryLoom HQ");
+  const response = await hqRequest(
+    credentials.serverUrl,
+    "/api/v1/device/maintenance/authorize",
+    {
+      method: "POST",
+      credentials,
+      fingerprint256: credentials.fingerprint256,
+      allowHttp: options.allowHttp ||
+        process.env.SENTRYLOOM_ALLOW_INSECURE_HQ === "1",
+      body: {
+        password: String(password || ""),
+        action: String(action || "critical-settings")
+      }
+    }
+  );
+  return response.body;
+}
+
+export async function requestHqMaintenancePassword(credentials, options = {}) {
+  if (!credentials) throw new Error("This endpoint is not enrolled with SentryLoom HQ");
+  const allowHttp = Boolean(
+    options.allowHttp || process.env.SENTRYLOOM_ALLOW_INSECURE_HQ === "1"
+  );
+  const keys = crypto.generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: "spki", format: "pem" },
+    privateKeyEncoding: { type: "pkcs8", format: "pem" }
+  });
+  const created = await hqRequest(
+    credentials.serverUrl,
+    "/api/v1/device/maintenance-requests",
+    {
+      method: "POST",
+      credentials,
+      fingerprint256: credentials.fingerprint256,
+      allowHttp,
+      body: {
+        action: String(options.action || "critical-settings"),
+        reason: String(options.reason || "").slice(0, 500),
+        publicKey: keys.publicKey
+      }
+    }
+  );
+  const deadline = Math.min(
+    Date.now() + 20000,
+    new Date(created.body.expiresAt).getTime()
+  );
+  while (Date.now() <= deadline) {
+    const status = await hqRequest(
+      credentials.serverUrl,
+      `/api/v1/device/maintenance-requests/${created.body.id}`,
+      {
+        credentials,
+        fingerprint256: credentials.fingerprint256,
+        allowHttp,
+        timeoutMs: 3000
+      }
+    );
+    if (status.body.status === "approved" && status.body.encryptedPassword) {
+      const password = crypto.privateDecrypt({
+        key: keys.privateKey,
+        padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+        oaepHash: "sha256"
+      }, Buffer.from(status.body.encryptedPassword, "base64")).toString("utf8");
+      return {
+        password,
+        requestId: created.body.id,
+        expiresAt: status.body.passwordExpiresAt
+      };
+    }
+    if (status.body.status === "rejected") {
+      throw new Error("The HQ administrator rejected the maintenance request");
+    }
+    if (status.body.status === "expired") break;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error("The HQ administrator did not approve the request within 20 seconds");
 }
 
 export class HqEnrollmentPoller {

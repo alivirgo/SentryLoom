@@ -1,5 +1,5 @@
 #define MyAppName "SentryLoom HQ"
-#define MyAppVersion "0.4.0"
+#define MyAppVersion "0.4.1"
 #define MyAppPublisher "NUC7 Studios"
 
 [Setup]
@@ -55,6 +55,7 @@ Filename: "{code:GetPowerShellPath}"; Parameters: "-NoLogo -NoProfile -NonIntera
 var
   HqPage: TInputQueryWizardPage;
   PasswordPage: TInputQueryWizardPage;
+  InstallDetails: TNewMemo;
 
 function SetEnvironmentVariable(lpName, lpValue: String): Boolean;
   external 'SetEnvironmentVariableW@kernel32.dll stdcall';
@@ -107,6 +108,25 @@ begin
     'Enter the password administrators will use to sign in. It must contain 12 to 128 characters.');
   PasswordPage.Add('Administrator password:', True);
   PasswordPage.Add('Confirm administrator password:', True);
+
+  InstallDetails := TNewMemo.Create(WizardForm);
+  InstallDetails.Parent := WizardForm.InstallingPage;
+  InstallDetails.Left := ScaleX(0);
+  InstallDetails.Top := WizardForm.ProgressGauge.Top + WizardForm.ProgressGauge.Height + ScaleY(18);
+  InstallDetails.Width := WizardForm.InstallingPage.ClientWidth;
+  InstallDetails.Height := WizardForm.InstallingPage.ClientHeight - InstallDetails.Top;
+  InstallDetails.ReadOnly := True;
+  InstallDetails.ScrollBars := ssVertical;
+  InstallDetails.WordWrap := True;
+  InstallDetails.Color := clWindow;
+end;
+
+procedure InstallDetail(Message: String);
+begin
+  WizardForm.StatusLabel.Caption := Message;
+  InstallDetails.Lines.Add(GetDateTimeString('hh:nn:ss', '-', ':') + '  ' + Message);
+  InstallDetails.SelStart := Length(InstallDetails.Text);
+  WizardForm.Update;
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
@@ -156,45 +176,67 @@ var
   Arguments: String;
 begin
   if FileExists(GetNodePath) then
+  begin
+    InstallDetail('Node.js runtime detected.');
     Exit;
-  WizardForm.StatusLabel.Caption := 'Installing the supported Node.js runtime…';
-  WizardForm.Update;
+  end;
+  InstallDetail('Node.js was not found; installing the supported LTS runtime.');
   Arguments :=
     'install --id OpenJS.NodeJS.LTS --exact --source winget --silent ' +
     '--accept-package-agreements --accept-source-agreements --disable-interactivity';
   if (not Exec(GetWingetPath, Arguments, ExpandConstant('{tmp}'), SW_HIDE,
       ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
     RaiseException('Node.js installation failed. Exit code: ' + IntToStr(ResultCode));
+  InstallDetail('Node.js runtime installed successfully.');
 end;
 
 procedure ConfigureHq;
 var
   ResultCode: Integer;
-  ResultFile, Parameters, Summary: String;
+  ResultFile, PasswordFile, InstallLog, Parameters, Summary: String;
   SummaryAnsi: AnsiString;
 begin
-  WizardForm.StatusLabel.Caption := 'Initializing and starting SentryLoom HQ…';
-  WizardForm.Update;
+  InstallDetail('Preparing the selected HQ name, address, port, and administrator credentials.');
   ResultFile := ExpandConstant('{tmp}\SentryLoom-HQ-Install-Result.txt');
+  PasswordFile := ExpandConstant('{tmp}\SentryLoom-HQ-Setup-Password.txt');
+  InstallLog := ExpandConstant('{commonappdata}\SentryLoom HQ\Logs\install.log');
   DeleteFile(ResultFile);
+  DeleteFile(PasswordFile);
+  if not SaveStringToFile(PasswordFile, PasswordPage.Values[0], False) then
+    RaiseException('Setup could not securely transfer the administrator password.');
   Parameters :=
     '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
     ExpandConstant('{app}\Install-SentryLoomHq.ps1') + '" -HqName "' +
     Trim(HqPage.Values[0]) + '" -PublicHost "' + Trim(HqPage.Values[1]) +
-    '" -Port ' + Trim(HqPage.Values[2]) + ' -ResultPath "' + ResultFile + '"';
-  SetEnvironmentVariable(
-    'SENTRYLOOM_HQ_SETUP_ADMIN_PASSWORD',
-    PasswordPage.Values[0]);
+    '" -Port ' + Trim(HqPage.Values[2]) + ' -ResultPath "' + ResultFile +
+    '" -AdminPasswordFile "' + PasswordFile + '" -InstallLogPath "' + InstallLog + '"';
+  InstallDetail('Creating or preserving the HQ database and TLS identity.');
+  InstallDetail('Hashing and verifying the administrator password selected in Setup.');
+  InstallDetail('Registering the self-restarting background service.');
+  InstallDetail('Creating and checking Windows Firewall rules for HTTPS and LAN discovery.');
+  InstallDetail('Starting HQ and verifying that its HTTPS listener is reachable.');
   try
     if (not Exec(GetPowerShellPath(''), Parameters, ExpandConstant('{app}'), SW_HIDE,
         ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
-      RaiseException('SentryLoom HQ initialization failed. Exit code: ' + IntToStr(ResultCode));
+    begin
+      Summary := '';
+      SummaryAnsi := '';
+      if FileExists(ResultFile) and LoadStringFromFile(ResultFile, SummaryAnsi) then
+        Summary := Trim(String(SummaryAnsi));
+      if Summary = '' then
+        Summary := 'No additional diagnostic details were produced.';
+      RaiseException(
+        'SentryLoom HQ configuration failed.' + #13#10 + #13#10 +
+        Summary + #13#10 + #13#10 +
+        'Exit code: ' + IntToStr(ResultCode));
+    end;
   finally
-    SetEnvironmentVariable('SENTRYLOOM_HQ_SETUP_ADMIN_PASSWORD', '');
+    DeleteFile(PasswordFile);
     PasswordPage.Values[0] := '';
     PasswordPage.Values[1] := '';
   end;
 
+  InstallDetail('HQ configuration and validation completed successfully.');
   Summary := 'SentryLoom HQ installed successfully.';
   SummaryAnsi := '';
   if FileExists(ResultFile) and LoadStringFromFile(ResultFile, SummaryAnsi) then

@@ -43,6 +43,11 @@ administrator password hashes, TLS configuration, and update metadata in its
 local data directory. SentryLoom does not operate a central service that
 receives this information.
 
+HQ stores maintenance-password hashes, expiry/use policy, revocation state, and
+maintenance request metadata. It does not store plaintext maintenance
+passwords. A password approved from a client request is encrypted with an
+ephemeral endpoint public key before delivery.
+
 HQ administrators control retention, host access, backups, firewall scope, and
 deletion. Uninstalling preserves server data unless the administrator
 explicitly requests its removal.

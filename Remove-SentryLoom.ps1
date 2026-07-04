@@ -12,6 +12,9 @@ $UsbHelper = Join-Path $PSScriptRoot 'Set-SentryLoomUsbStorage.ps1'
 Unregister-ScheduledTask -TaskName 'SentryLoom - Daily Quick Scan' -Confirm:$false -ErrorAction SilentlyContinue
 Unregister-ScheduledTask -TaskName 'SentryLoom - Weekly Idle Full Scan' -Confirm:$false -ErrorAction SilentlyContinue
 Unregister-ScheduledTask -TaskName 'SentryLoom - Realtime Protection' -Confirm:$false -ErrorAction SilentlyContinue
+Remove-NetFirewallRule -Group 'SentryLoom Endpoint' -ErrorAction SilentlyContinue
+Remove-NetFirewallRule -Name 'SentryLoom-Endpoint-Web-Out' -ErrorAction SilentlyContinue
+Remove-NetFirewallRule -Name 'SentryLoom-Endpoint-HQ-Discovery-Out' -ErrorAction SilentlyContinue
 if ((Test-Path -LiteralPath $UsbBackup -PathType Leaf) -and (Test-Path -LiteralPath $UsbHelper -PathType Leaf)) {
     & $UsbHelper -Action Restore -BackupPath $UsbBackup
 }
@@ -29,4 +32,4 @@ if ($RemoveLocalData) {
     }
 }
 
-Write-Host 'SentryLoom shortcuts and scheduled tasks removed.' -ForegroundColor Green
+Write-Host 'SentryLoom shortcuts, scheduled tasks, and firewall rules removed.' -ForegroundColor Green

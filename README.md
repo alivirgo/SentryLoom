@@ -95,6 +95,10 @@ terms.
 
 - HTTPS management service with self-generated TLS and certificate pinning.
 - LAN discovery and administrator-approved endpoint enrollment.
+- Rotating, revocable HQ maintenance passwords for critical policy changes,
+  protection disablement, HQ disconnection, and uninstall.
+- Endpoint-initiated maintenance requests with a strict 20-second approval
+  window and endpoint-specific encrypted delivery.
 - Independent, revocable device bearer tokens.
 - Two-second sanitized endpoint telemetry and 60-second offline detection.
 - Fleet alerts for threats, failed collectors, failed commands, and stale
@@ -238,6 +242,13 @@ Setup creates the TLS certificate, SQLite database, firewall rules, and
 self-restarting startup task. The packaged HQ installer asks the administrator
 to choose and confirm a password; source setup generates one unless
 `SENTRYLOOM_HQ_SETUP_ADMIN_PASSWORD` is supplied to the initialization process.
+
+HQ administrators generate long one-time maintenance passwords from the
+**Rotating endpoint passwords** panel. Passwords are shown once, stored only as
+hashes, expire after 5–60 minutes, have a bounded use count, and can be revoked
+immediately. An endpoint may alternatively request approval while an
+administrator is online; that request expires after 20 seconds and its
+one-time password is RSA-encrypted for the requesting endpoint.
 
 ### CLI
 

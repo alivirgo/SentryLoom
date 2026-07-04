@@ -37,7 +37,14 @@ The scanner does not execute inspected content. The dashboard binds only to `127
 - `src/lib/hq-client.js`: LAN discovery, certificate-pinned enrollment, telemetry, and allowlisted command delivery.
 - `src/server.js`: loopback dashboard and protected API.
 - `src/cli.js`: automation and service entry point.
-- `server/`: on-premises HTTPS fleet service, SQLite state, discovery responder, and management dashboard.
+- `server/`: on-premises HTTPS fleet service, SQLite state, discovery responder,
+  management dashboard, and rotating maintenance authorization service.
+
+Managed endpoints use HQ-issued maintenance passwords for critical local
+changes. Administrator-generated passwords are the primary path and are
+hash-only, expiring, use-limited, and revocable. For interactive requests the
+endpoint creates an ephemeral RSA key pair, HQ allows 20 seconds for approval,
+and the approved one-time password is encrypted to that key before delivery.
 
 ## Detection policy
 

@@ -42,11 +42,13 @@ import { notificationForEvent, showDetectionNotification } from "./windows-notif
 import { consumeUiCommand } from "./ui-command.js";
 import {
   acquireHqConnectorLease,
+  authorizeHqMaintenance,
   discoverHqServers,
   enrollWithHq,
   HqEnrollmentPoller,
   HqConnector,
-  requestHqEnrollment
+  requestHqEnrollment,
+  requestHqMaintenancePassword
 } from "./hq-client.js";
 import {
   clearHqCredentials,
@@ -526,7 +528,7 @@ export class AntivirusEngine {
       pending: pending?.status === "pending",
       rejected: pending?.status === "rejected",
       approvalStatus: pending?.status || null,
-      hqName: credentials?.hqName || null,
+      hqName: credentials?.hqName || pending?.hqName || null,
       serverUrl: credentials?.serverUrl || pending?.serverUrl || null,
       deviceId: credentials?.deviceId || null,
       enrolledAt: credentials?.enrolledAt || null,
@@ -590,6 +592,37 @@ export class AntivirusEngine {
       deviceId: status.deviceId
     });
     return this.getHqStatus();
+  }
+
+  async authorizeMaintenance(password, action = "critical-settings") {
+    if (!this.config.management.enabled) return { authorized: true, standalone: true };
+    const credentials = await loadHqCredentials();
+    if (!credentials) {
+      throw new Error("HQ maintenance authorization requires an approved managed endpoint");
+    }
+    const result = await authorizeHqMaintenance(credentials, password, action);
+    await appendAudit("hq.maintenance-authorized", {
+      action,
+      authorizationId: result.authorizationId
+    });
+    return result;
+  }
+
+  async requestMaintenancePassword(options = {}) {
+    if (!this.config.management.enabled) {
+      throw new Error("This endpoint is not managed by SentryLoom HQ");
+    }
+    const credentials = await loadHqCredentials();
+    if (!credentials) {
+      throw new Error("This endpoint must be approved by HQ before requesting maintenance access");
+    }
+    const result = await requestHqMaintenancePassword(credentials, options);
+    await appendAudit("hq.maintenance-password-approved", {
+      action: options.action || "critical-settings",
+      requestId: result.requestId,
+      expiresAt: result.expiresAt
+    });
+    return result;
   }
 
   async getHqTelemetry() {

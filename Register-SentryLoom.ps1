@@ -9,6 +9,9 @@ param(
 $ErrorActionPreference = 'Stop'
 $FailureLog = if ($FailureLogPath) { $FailureLogPath } else { Join-Path $env:TEMP 'SentryLoom-Register-Error.txt' }
 Remove-Item -LiteralPath $FailureLog -Force -ErrorAction SilentlyContinue
+function Write-RegistrationStep([string]$Message) {
+    Write-Host "[SentryLoom setup] $Message" -ForegroundColor Cyan
+}
 trap {
     $Details = @(
         $_.Exception.Message
@@ -35,6 +38,7 @@ $TaskPrincipal = New-ScheduledTaskPrincipal -UserId $QualifiedUser -LogonType In
 if (-not (Test-Path -LiteralPath $Launcher)) {
     throw "The native SentryLoom launcher is missing: $Launcher"
 }
+Write-RegistrationStep "Validated the launcher and runtime paths."
 
 $Programs = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'
 $Desktop = [Environment]::GetFolderPath('Desktop')
@@ -63,6 +67,7 @@ foreach ($LinkPath in @(
     $Shortcut.Description = 'SentryLoom Endpoint Security console'
     $Shortcut.Save()
 }
+Write-RegistrationStep 'Created the Start Menu and Desktop application shortcuts.'
 
 if (-not $SkipScheduledScans) {
     Stop-ScheduledTask -TaskName 'SentryLoom - Daily Quick Scan' -ErrorAction SilentlyContinue
@@ -80,6 +85,7 @@ if (-not $SkipScheduledScans) {
     $FullTrigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday -At 3am
     $FullSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -RunOnlyIfIdle -IdleDuration (New-TimeSpan -Minutes 10) -IdleWaitTimeout (New-TimeSpan -Hours 6) -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Hours 8)
     Register-ScheduledTask -TaskName 'SentryLoom - Weekly Idle Full Scan' -Action $FullAction -Trigger $FullTrigger -Settings $FullSettings -Principal $TaskPrincipal -Description 'SentryLoom weekly full scan while the PC is idle' -Force | Out-Null
+    Write-RegistrationStep 'Registered daily quick-scan and weekly idle full-scan tasks.'
 }
 
 if (-not $SkipRealtimeStartup) {
@@ -103,13 +109,54 @@ if (-not $SkipRealtimeStartup) {
         -DontStopIfGoingOnBatteries
     Register-ScheduledTask -TaskName 'SentryLoom - Realtime Protection' -Action $Action -Trigger $Trigger -Settings $Settings -Principal $TaskPrincipal -Description 'SentryLoom realtime endpoint protection' -Force | Out-Null
     Start-ScheduledTask -TaskName 'SentryLoom - Realtime Protection'
+    Write-RegistrationStep 'Registered and started self-restarting realtime protection.'
 }
+
+Write-RegistrationStep 'Configuring application-scoped Windows Firewall policies.'
+Remove-NetFirewallRule -Group 'SentryLoom Endpoint' -ErrorAction SilentlyContinue
+$EndpointFirewallRules = @(
+    @{
+        Name = 'SentryLoom-Endpoint-Web-Out'
+        DisplayName = 'SentryLoom Endpoint - HTTPS and threat intelligence outbound'
+        Protocol = 'TCP'
+        RemotePort = 'Any'
+        RemoteAddress = 'Any'
+    },
+    @{
+        Name = 'SentryLoom-Endpoint-HQ-Discovery-Out'
+        DisplayName = 'SentryLoom Endpoint - HQ discovery outbound'
+        Protocol = 'UDP'
+        RemotePort = 32110
+        RemoteAddress = 'LocalSubnet'
+    }
+)
+foreach ($Rule in $EndpointFirewallRules) {
+    New-NetFirewallRule `
+        -Name $Rule.Name `
+        -DisplayName $Rule.DisplayName `
+        -Group 'SentryLoom Endpoint' `
+        -Direction Outbound `
+        -Action Allow `
+        -Program $Node `
+        -Protocol $Rule.Protocol `
+        -RemotePort $Rule.RemotePort `
+        -RemoteAddress $Rule.RemoteAddress `
+        -Profile Any | Out-Null
+}
+$InvalidFirewallRule = Get-NetFirewallRule -Group 'SentryLoom Endpoint' -ErrorAction Stop |
+    Where-Object Enabled -ne 'True' |
+    Select-Object -First 1
+if ($InvalidFirewallRule) {
+    throw "Firewall rule '$($InvalidFirewallRule.DisplayName)' is not enabled."
+}
+Write-RegistrationStep 'Verified endpoint firewall policies for HQ discovery and HTTPS communication.'
 
 Write-Host 'SentryLoom Endpoint Security registered for the current user.' -ForegroundColor Green
 Write-Host "Application: $Root"
 Write-Host "Scheduled task identity: $QualifiedUser"
 Write-Host 'Use the Desktop or Start Menu shortcut to launch the security console.'
 Write-Host "Realtime task privilege: $(if ($SystemWideProtection) { 'Highest' } else { 'Limited' })"
+Write-Host 'Firewall: application-scoped outbound HTTPS and LAN discovery rules are enabled.'
 if (-not (Test-Path -LiteralPath $ClamScan)) {
     Write-Warning 'ClamAV is not installed. Install the official Cisco.ClamAV package with winget to enable full ClamAV updates and scanning.'
     Write-Host 'winget install --id Cisco.ClamAV --exact --source winget'

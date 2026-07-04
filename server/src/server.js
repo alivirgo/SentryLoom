@@ -179,6 +179,7 @@ export async function createHqServer(config, options = {}) {
   const loginAttempts = new Map();
   const adminAttempts = new Map();
   const enrollmentRequestAttempts = new Map();
+  const maintenanceAttempts = new Map();
   let discoverySocket = null;
 
   function adminSession(request) {
@@ -301,6 +302,79 @@ export async function createHqServer(config, options = {}) {
           });
           return;
         }
+        if (request.method === "POST" && url.pathname === "/api/v1/device/maintenance-requests") {
+          const body = await readJson(request);
+          let publicKey;
+          try {
+            publicKey = crypto.createPublicKey(String(body.publicKey || ""));
+          } catch {
+            sendJson(response, 400, { error: "A valid maintenance request public key is required" });
+            return;
+          }
+          if (publicKey.asymmetricKeyType !== "rsa") {
+            sendJson(response, 400, { error: "Maintenance requests require an RSA public key" });
+            return;
+          }
+          const pending = store.createMaintenanceRequest(
+            device.id,
+            body.action,
+            body.reason,
+            publicKey.export({ type: "spki", format: "pem" }),
+            20
+          );
+          sendJson(response, 202, {
+            id: pending.id,
+            status: pending.status,
+            requestedAt: pending.requestedAt,
+            expiresAt: pending.expiresAt,
+            approvalWindowSeconds: 20
+          });
+          return;
+        }
+        const maintenanceRequestMatch = url.pathname.match(
+          /^\/api\/v1\/device\/maintenance-requests\/([a-f0-9-]{36})$/i
+        );
+        if (request.method === "GET" && maintenanceRequestMatch) {
+          const pending = store.getMaintenanceRequest(maintenanceRequestMatch[1]);
+          if (!pending || pending.deviceId !== device.id) {
+            sendJson(response, 404, { error: "Maintenance request was not found" });
+            return;
+          }
+          sendJson(response, 200, {
+            id: pending.id,
+            status: pending.status,
+            expiresAt: pending.expiresAt,
+            passwordExpiresAt: pending.passwordExpiresAt,
+            encryptedPassword: pending.status === "approved"
+              ? pending.encryptedPassword
+              : undefined
+          });
+          return;
+        }
+        if (request.method === "POST" && url.pathname === "/api/v1/device/maintenance/authorize") {
+          const prior = maintenanceAttempts.get(device.id) || { count: 0, since: Date.now() };
+          if (Date.now() - prior.since < 60000 && prior.count >= 10) {
+            sendJson(response, 429, { error: "Too many maintenance password attempts" });
+            return;
+          }
+          const body = await readJson(request);
+          const authorized = store.consumeMaintenancePassword(String(body.password || ""), device.id);
+          if (!authorized) {
+            maintenanceAttempts.set(device.id, {
+              count: Date.now() - prior.since > 60000 ? 1 : prior.count + 1,
+              since: Date.now() - prior.since > 60000 ? Date.now() : prior.since
+            });
+            sendJson(response, 403, { error: "Maintenance password is invalid, expired, used, or revoked" });
+            return;
+          }
+          maintenanceAttempts.delete(device.id);
+          sendJson(response, 200, {
+            authorized: true,
+            authorizationId: authorized.id,
+            action: String(body.action || "critical-settings").slice(0, 100)
+          });
+          return;
+        }
         if (request.method === "GET" && url.pathname === "/api/v1/device/update") {
           sendJson(response, 200, { update: updateService.publicManifest(await updateService.latest()) });
           return;
@@ -387,10 +461,14 @@ export async function createHqServer(config, options = {}) {
         }
         if (request.method === "GET" && url.pathname === "/api/admin/bootstrap") {
           sendJson(response, 200, {
-            hq: { name: config.hqName, version: "0.4.0" },
+            hq: { name: config.hqName, version: "0.4.1" },
             csrf: session.csrf,
             devices: store.listDevices(),
-            enrollmentRequests: store.listEnrollmentRequests()
+            enrollmentRequests: store.listEnrollmentRequests(),
+            maintenance: {
+              passwords: store.listMaintenancePasswords(),
+              requests: store.listMaintenanceRequests()
+            }
           });
           return;
         }
@@ -410,6 +488,96 @@ export async function createHqServer(config, options = {}) {
           sendJson(response, 200, {
             update: updateService.publicManifest(await updateService.latest()),
             autoDeploy: Boolean(config.updates?.autoDeploy)
+          });
+          return;
+        }
+        if (request.method === "GET" && url.pathname === "/api/admin/maintenance") {
+          sendJson(response, 200, {
+            generatedAt: new Date().toISOString(),
+            passwords: store.listMaintenancePasswords(),
+            requests: store.listMaintenanceRequests()
+          });
+          return;
+        }
+        if (request.method === "POST" && url.pathname === "/api/admin/maintenance/passwords") {
+          const body = await readJson(request);
+          const password = `SL-${crypto.randomBytes(24).toString("base64url")}`;
+          const policy = store.createMaintenancePassword(password, {
+            minutes: body.minutes,
+            uses: body.uses,
+            source: "administrator"
+          });
+          sendJson(response, 201, {
+            password,
+            ...policy,
+            notice: "This password is shown once. Store it securely or generate another."
+          });
+          return;
+        }
+        const maintenancePasswordRevokeMatch = url.pathname.match(
+          /^\/api\/admin\/maintenance\/passwords\/([a-f0-9-]{36})\/revoke$/i
+        );
+        if (request.method === "POST" && maintenancePasswordRevokeMatch) {
+          sendJson(response, 200, {
+            revoked: store.revokeMaintenancePassword(maintenancePasswordRevokeMatch[1])
+          });
+          return;
+        }
+        const maintenanceReviewMatch = url.pathname.match(
+          /^\/api\/admin\/maintenance\/requests\/([a-f0-9-]{36})\/(approve|reject)$/i
+        );
+        if (request.method === "POST" && maintenanceReviewMatch) {
+          const pending = store.getMaintenanceRequest(maintenanceReviewMatch[1]);
+          if (!pending) {
+            sendJson(response, 404, { error: "Maintenance request was not found" });
+            return;
+          }
+          if (pending.status !== "pending") {
+            sendJson(response, 409, { error: "The maintenance request is no longer pending" });
+            return;
+          }
+          if (maintenanceReviewMatch[2] === "reject") {
+            const reviewed = store.reviewMaintenanceRequest(pending.id, false);
+            sendJson(response, 200, {
+              id: reviewed.id,
+              status: reviewed.status,
+              reviewedAt: reviewed.reviewedAt
+            });
+            return;
+          }
+          const password = `SL-${crypto.randomBytes(24).toString("base64url")}`;
+          const policy = store.createMaintenancePassword(password, {
+            minutes: 2,
+            uses: 1,
+            source: "client-request",
+            deviceId: pending.deviceId
+          });
+          let encryptedPassword;
+          try {
+            encryptedPassword = crypto.publicEncrypt({
+              key: pending.publicKey,
+              padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+              oaepHash: "sha256"
+            }, Buffer.from(password, "utf8")).toString("base64");
+          } catch (error) {
+            store.revokeMaintenancePassword(policy.id);
+            throw new Error(`Could not encrypt the maintenance password for the endpoint: ${error.message}`);
+          }
+          let reviewed;
+          try {
+            reviewed = store.reviewMaintenanceRequest(pending.id, true, {
+              encryptedPassword,
+              maintenancePasswordId: policy.id
+            });
+          } catch (error) {
+            store.revokeMaintenancePassword(policy.id);
+            throw error;
+          }
+          sendJson(response, 200, {
+            id: reviewed.id,
+            status: reviewed.status,
+            reviewedAt: reviewed.reviewedAt,
+            expiresAt: policy.expiresAt
           });
           return;
         }
@@ -546,7 +714,10 @@ export async function createHqServer(config, options = {}) {
     },
     startDiscovery() {
       if (options.httpOnly || config.discovery?.enabled === false || discoverySocket) return;
-      discoverySocket = dgram.createSocket("udp4");
+      discoverySocket = dgram.createSocket({ type: "udp4", reuseAddr: true });
+      discoverySocket.on("error", (error) => {
+        console.error(`SentryLoom HQ discovery error: ${error.message}`);
+      });
       discoverySocket.on("message", (message, remote) => {
         if (message.toString("utf8").trim() !== DISCOVERY_REQUEST) return;
         const response = Buffer.from(JSON.stringify({
@@ -555,9 +726,13 @@ export async function createHqServer(config, options = {}) {
           url: `https://${config.publicHost}:${config.port}`,
           fingerprint256: config.tls.fingerprint256
         }));
-        discoverySocket.send(response, remote.port, remote.address);
+        discoverySocket.send(response, remote.port, remote.address, (error) => {
+          if (error) {
+            console.error(`SentryLoom HQ discovery response failed for ${remote.address}: ${error.message}`);
+          }
+        });
       });
-      discoverySocket.bind(config.discovery.port, config.host, () => {
+      discoverySocket.bind(config.discovery.port, "0.0.0.0", () => {
         discoverySocket.setBroadcast(true);
       });
     },

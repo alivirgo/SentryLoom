@@ -92,19 +92,48 @@ if ($RegisterStartupTask) {
     Start-ScheduledTask -TaskName 'SentryLoom HQ Server'
 }
 
+Remove-NetFirewallRule -Group 'SentryLoom HQ' -ErrorAction SilentlyContinue
+Remove-NetFirewallRule -DisplayName 'SentryLoom HQ - HTTPS' -ErrorAction SilentlyContinue
+Remove-NetFirewallRule -DisplayName 'SentryLoom HQ - Discovery' -ErrorAction SilentlyContinue
 foreach ($Rule in @(
-    @{ Name = 'SentryLoom HQ - HTTPS'; Protocol = 'TCP'; Port = $Port },
-    @{ Name = 'SentryLoom HQ - Discovery'; Protocol = 'UDP'; Port = 32110 }
+    @{
+        Name = 'SentryLoom-HQ-HTTPS-In'
+        DisplayName = 'SentryLoom HQ - HTTPS inbound'
+        Direction = 'Inbound'
+        Protocol = 'TCP'
+        LocalPort = $Port
+    },
+    @{
+        Name = 'SentryLoom-HQ-Discovery-In'
+        DisplayName = 'SentryLoom HQ - Discovery inbound'
+        Direction = 'Inbound'
+        Protocol = 'UDP'
+        LocalPort = 32110
+    },
+    @{
+        Name = 'SentryLoom-HQ-Discovery-Out'
+        DisplayName = 'SentryLoom HQ - Discovery responses outbound'
+        Direction = 'Outbound'
+        Protocol = 'UDP'
+        LocalPort = 32110
+    }
 )) {
-    Remove-NetFirewallRule -DisplayName $Rule.Name -ErrorAction SilentlyContinue
     New-NetFirewallRule `
-        -DisplayName $Rule.Name `
-        -Direction Inbound `
+        -Name $Rule.Name `
+        -DisplayName $Rule.DisplayName `
+        -Group 'SentryLoom HQ' `
+        -Direction $Rule.Direction `
         -Action Allow `
         -Protocol $Rule.Protocol `
-        -LocalPort $Rule.Port `
-        -Profile Domain,Private `
+        -LocalPort $Rule.LocalPort `
+        -Profile Any `
         -RemoteAddress LocalSubnet | Out-Null
+}
+$InvalidFirewallRule = Get-NetFirewallRule -Group 'SentryLoom HQ' -ErrorAction Stop |
+    Where-Object Enabled -ne 'True' |
+    Select-Object -First 1
+if ($InvalidFirewallRule) {
+    throw "Firewall rule '$($InvalidFirewallRule.DisplayName)' is not enabled."
 }
 
 Write-Host ''

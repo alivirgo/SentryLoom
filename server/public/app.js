@@ -2,8 +2,10 @@ let csrf = "";
 let devices = [];
 let enrollmentRequests = [];
 let updateState = { update: null, autoDeploy: false };
+let maintenanceState = { passwords: [], requests: [] };
 let activeAlerts = [];
 let knownAlertIds = null;
+let knownMaintenanceRequestIds = null;
 let selectedDeviceId = null;
 let pollTimer = null;
 let detailRequestActive = false;
@@ -58,6 +60,12 @@ function relative(value) {
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
   return `${Math.floor(seconds / 86400)}d ago`;
+}
+
+function timeUntil(value) {
+  const seconds = Math.max(0, Math.ceil((new Date(value).getTime() - Date.now()) / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  return `${Math.ceil(seconds / 60)}m`;
 }
 
 function dateTime(value) {
@@ -333,6 +341,40 @@ function renderFleet() {
   renderUpdateRelease();
 }
 
+function renderMaintenance() {
+  const activePasswords = (maintenanceState.passwords || []).filter((item) => item.active);
+  const pendingRequests = (maintenanceState.requests || []).filter((item) => item.status === "pending");
+  const currentRequestIds = new Set(pendingRequests.map((item) => item.id));
+  if (knownMaintenanceRequestIds) {
+    const fresh = pendingRequests.find((item) => !knownMaintenanceRequestIds.has(item.id));
+    if (fresh) {
+      toast(`${fresh.deviceName} is requesting immediate maintenance approval`);
+      desktopAlert({
+        id: `maintenance:${fresh.id}`,
+        title: "Maintenance approval requested",
+        deviceName: fresh.deviceName,
+        message: "Approve or reject within 20 seconds"
+      });
+    }
+  }
+  knownMaintenanceRequestIds = currentRequestIds;
+  $("#maintenance-password-empty").classList.toggle("hidden", Boolean(activePasswords.length));
+  $("#maintenance-passwords").innerHTML = activePasswords.map((item) => `
+    <article class="maintenance-row">
+      <div><strong>${escapeHtml(item.source === "client-request" ? "Endpoint-requested password" : "Administrator password")}</strong><small>${escapeHtml(item.usesRemaining)} use(s) remaining · expires in ${escapeHtml(timeUntil(item.expiresAt))}${item.deviceId ? " · device scoped" : " · all managed devices"}</small></div>
+      <button class="danger" data-revoke-maintenance="${item.id}">Revoke</button>
+    </article>
+  `).join("");
+  $("#maintenance-request-empty").classList.toggle("hidden", Boolean(pendingRequests.length));
+  $("#maintenance-requests").innerHTML = pendingRequests.map((item) => {
+    const seconds = Math.max(0, Math.ceil((new Date(item.expiresAt).getTime() - Date.now()) / 1000));
+    return `<article class="maintenance-row">
+      <div><strong>${escapeHtml(item.deviceName)}</strong><small>${escapeHtml(humanLabel(item.action))} · ${seconds}s remaining${item.reason ? ` · ${escapeHtml(item.reason)}` : ""}</small></div>
+      <div class="maintenance-actions"><button data-approve-maintenance="${item.id}">Approve</button><button class="danger" data-reject-maintenance="${item.id}">Reject</button></div>
+    </article>`;
+  }).join("");
+}
+
 async function refreshDeviceDetails(force = false) {
   if (!selectedDeviceId || detailRequestActive) return;
   if (!force && !$("#device-dialog").open) return;
@@ -346,14 +388,16 @@ async function refreshDeviceDetails(force = false) {
 
 async function refresh() {
   let alertState;
-  [devices, enrollmentRequests, updateState, alertState] = await Promise.all([
+  [devices, enrollmentRequests, updateState, alertState, maintenanceState] = await Promise.all([
     api("/api/admin/devices"),
     api("/api/admin/enrollment-requests"),
     api("/api/admin/update"),
-    api("/api/admin/alerts")
+    api("/api/admin/alerts"),
+    api("/api/admin/maintenance")
   ]);
   renderFleet();
   renderAlerts(alertState);
+  renderMaintenance();
   await refreshDeviceDetails();
   setServerAvailability(true);
 }
@@ -366,6 +410,9 @@ $("#login-form").addEventListener("submit", async (event) => {
       body: JSON.stringify({ password: $("#password").value })
     });
     csrf = result.csrf;
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {});
+    }
     $("#login").classList.add("hidden");
     $("#shell").classList.remove("hidden");
     await refresh();
@@ -392,6 +439,62 @@ $("#update-release").addEventListener("click", async (event) => {
     toast(error.message);
   } finally {
     button.disabled = false;
+  }
+});
+
+$("#generate-maintenance").addEventListener("click", async () => {
+  const button = $("#generate-maintenance");
+  try {
+    button.disabled = true;
+    const result = await api("/api/admin/maintenance/passwords", {
+      method: "POST",
+      body: JSON.stringify({
+        minutes: Number($("#maintenance-minutes").value),
+        uses: Number($("#maintenance-uses").value)
+      })
+    });
+    $("#generated-maintenance-password").value = result.password;
+    $("#maintenance-secret").classList.remove("hidden");
+    toast("A new rotating maintenance password was generated");
+    await refresh();
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$("#copy-maintenance-password").addEventListener("click", async () => {
+  const input = $("#generated-maintenance-password");
+  try {
+    await navigator.clipboard.writeText(input.value);
+    toast("Maintenance password copied");
+  } catch {
+    input.select();
+    document.execCommand("copy");
+    toast("Maintenance password copied");
+  }
+});
+
+$(".maintenance-panel").addEventListener("click", async (event) => {
+  const revoke = event.target.closest("[data-revoke-maintenance]");
+  const approve = event.target.closest("[data-approve-maintenance]");
+  const reject = event.target.closest("[data-reject-maintenance]");
+  const id = revoke?.dataset.revokeMaintenance ||
+    approve?.dataset.approveMaintenance ||
+    reject?.dataset.rejectMaintenance;
+  if (!id) return;
+  const route = revoke
+    ? `/api/admin/maintenance/passwords/${id}/revoke`
+    : `/api/admin/maintenance/requests/${id}/${approve ? "approve" : "reject"}`;
+  try {
+    event.target.disabled = true;
+    await api(route, { method: "POST", body: "{}" });
+    toast(revoke ? "Maintenance password revoked" : `Maintenance request ${approve ? "approved" : "rejected"}`);
+    await refresh();
+  } catch (error) {
+    event.target.disabled = false;
+    toast(error.message);
   }
 });
 

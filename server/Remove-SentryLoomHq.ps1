@@ -6,6 +6,10 @@ param(
 $ErrorActionPreference = 'Stop'
 Stop-ScheduledTask -TaskName 'SentryLoom HQ Server' -ErrorAction SilentlyContinue
 Unregister-ScheduledTask -TaskName 'SentryLoom HQ Server' -Confirm:$false -ErrorAction SilentlyContinue
+Remove-NetFirewallRule -Group 'SentryLoom HQ' -ErrorAction SilentlyContinue
+Remove-NetFirewallRule -Name 'SentryLoom-HQ-HTTPS-In' -ErrorAction SilentlyContinue
+Remove-NetFirewallRule -Name 'SentryLoom-HQ-Discovery-In' -ErrorAction SilentlyContinue
+Remove-NetFirewallRule -Name 'SentryLoom-HQ-Discovery-Out' -ErrorAction SilentlyContinue
 Remove-NetFirewallRule -DisplayName 'SentryLoom HQ - HTTPS' -ErrorAction SilentlyContinue
 Remove-NetFirewallRule -DisplayName 'SentryLoom HQ - Discovery' -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath (Join-Path $PSScriptRoot 'SentryLoom HQ.url') -Force -ErrorAction SilentlyContinue

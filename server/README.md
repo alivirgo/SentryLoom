@@ -59,11 +59,17 @@ commands remain allowlisted and cannot execute arbitrary commands.
 
 ## Initialize on the HQ Windows server
 
-Run `SentryLoom-HQ-Setup-0.4.0.exe` and provide the server's DNS/computer name.
+Run `SentryLoom-HQ-Setup-0.4.1.exe` and provide the server's DNS/computer name.
 Setup installs prerequisites, initializes new servers, preserves existing data
 during upgrades, registers the self-restarting startup task, and asks for the
 administrator password with confirmation. On upgrade, the entered password
 becomes the new HQ console password.
+
+The HQ console also provides rotating endpoint maintenance passwords. These
+are separate from the HQ console password: they are long, expiring,
+use-limited, revocable, and stored only as hashes. Endpoints can request a
+one-time password for immediate administrator approval; the approval window is
+20 seconds and delivery is encrypted to that endpoint.
 
 For a source installation, run PowerShell as Administrator:
 

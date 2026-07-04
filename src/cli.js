@@ -35,6 +35,13 @@ function hasFlag(name) {
   return true;
 }
 
+async function authorizeCriticalAction(engine, action) {
+  await engine.authorizeMaintenance(
+    process.env.SENTRYLOOM_MAINTENANCE_PASSWORD,
+    action
+  );
+}
+
 function printHelp() {
   console.log(`${APP_NAME} ${APP_VERSION}
 
@@ -52,7 +59,7 @@ Usage:
   sentryloom dns status|apply|restore
   sentryloom firewall status|clear
   sentryloom audit verify
-  sentryloom hq discover|enroll-env|status|disconnect
+  sentryloom hq discover|enroll-env|status|disconnect|maintenance-authorize-env
 
 Scanning and signature verification happen locally. Network access is used only for an explicitly requested database update.`);
 }
@@ -293,10 +300,19 @@ async function main() {
         const engine = await new AntivirusEngine().initialize();
         await engine.updateConfig({ management: { enabled: true } });
         console.log(`Enrollment approval requested from ${pending.hqName}`);
+      } else if (action === "maintenance-authorize-env") {
+        const password = process.env.SENTRYLOOM_MAINTENANCE_PASSWORD;
+        const maintenanceAction = process.env.SENTRYLOOM_MAINTENANCE_ACTION || "uninstall";
+        const engine = await new AntivirusEngine().initialize();
+        await engine.authorizeMaintenance(password, maintenanceAction);
+        console.log("Maintenance authorization accepted");
       } else {
         const engine = await new AntivirusEngine().initialize();
         if (action === "status") console.log(JSON.stringify(await engine.getHqStatus(), null, 2));
-        else if (action === "disconnect") console.log(JSON.stringify(await engine.disconnectHq(), null, 2));
+        else if (action === "disconnect") {
+          await authorizeCriticalAction(engine, "disconnect-hq");
+          console.log(JSON.stringify(await engine.disconnectHq(), null, 2));
+        }
         else throw new Error(`Unknown HQ action: ${action}`);
       }
       break;
@@ -364,8 +380,10 @@ async function main() {
       } else if (action === "apply") {
         const profileId = args.shift();
         if (!profileId) throw new Error("Provide a DNS filtering profile ID");
+        await authorizeCriticalAction(engine, "dns-filtering-change");
         console.log(JSON.stringify(await engine.applyDnsFiltering(profileId), null, 2));
       } else if (action === "restore") {
+        await authorizeCriticalAction(engine, "dns-filtering-change");
         console.log(JSON.stringify(await engine.restoreDnsFiltering(), null, 2));
       } else {
         throw new Error(`Unknown DNS action: ${action}`);
@@ -378,6 +396,7 @@ async function main() {
       if (action === "status") {
         console.log(JSON.stringify(await engine.getFirewallPolicyStatus(), null, 2));
       } else if (action === "clear") {
+        await authorizeCriticalAction(engine, "firewall-policy-change");
         console.log(JSON.stringify(await engine.clearFirewallPolicy(), null, 2));
       } else {
         throw new Error(`Unknown firewall action: ${action}`);

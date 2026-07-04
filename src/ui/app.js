@@ -6,6 +6,7 @@ let knownEventIds = null;
 let quarantineRequest = null;
 let discoveredHqServers = [];
 let dashboardReachable = true;
+let hqEnrolled = false;
 
 const savedTheme = localStorage.getItem("sentryloom-theme");
 document.documentElement.dataset.theme = savedTheme === "light" ? "light" : "dark";
@@ -170,6 +171,7 @@ function renderStatus(status) {
 function renderHq(status) {
   if (!status) return;
   const enrolled = Boolean(status.deviceId || status.enrolled);
+  hqEnrolled = enrolled;
   const pending = Boolean(status.pending);
   const rejected = Boolean(status.rejected);
   const connected = status.connected === undefined
@@ -190,8 +192,20 @@ function renderHq(status) {
     ? `${status.hqName || "SentryLoom HQ"} · ${status.serverUrl || "server unavailable"}${status.delegated ? " · Managed by the background protection agent" : ""}${status.lastConnectedAt ? ` · Last contact ${relativeTime(status.lastConnectedAt)}` : ""}${status.lastResumeAt ? ` · Resumed ${relativeTime(status.lastResumeAt)}` : ""}${status.lastError ? ` · ${status.lastError}` : ""}${status.nextRetryAt ? ` · Retry ${relativeTime(status.nextRetryAt)}` : ""}`
     : "This endpoint is locally managed and does not send telemetry to a server.";
   $("#disconnect-hq").classList.toggle("hidden", !enrolled && !pending && !rejected);
-  $("#enroll-hq").classList.toggle("hidden", enrolled || pending || rejected);
+  $("#enroll-hq").classList.toggle("hidden", enrolled);
+  $("#enroll-hq").textContent = pending
+    ? "Request approval again"
+    : rejected ? "Submit a new approval request" : "Request administrator approval";
+  $("#hq-maintenance").classList.toggle("hidden", !enrolled);
   if (status.serverUrl && !$("#hq-url").value) $("#hq-url").value = status.serverUrl;
+}
+
+function maintenancePassword() {
+  return $("#maintenance-password").value;
+}
+
+function clearMaintenancePassword() {
+  $("#maintenance-password").value = "";
 }
 
 function renderProgress(status) {
@@ -530,6 +544,7 @@ $("#exit-app").addEventListener("click", async () => {
 });
 $("#save-settings").addEventListener("click", async () => {
   const body = {
+    maintenancePassword: maintenancePassword(),
     protection: {
       realtimeEnabled: $("#setting-realtime").checked,
       monitorAllFixedDrives: $("#setting-all-drives").checked,
@@ -554,8 +569,40 @@ $("#save-settings").addEventListener("click", async () => {
   };
   try {
     dashboard.config = await api("/api/config", { method: "PATCH", body: JSON.stringify(body) });
+    clearMaintenancePassword();
     toast("Protection policy saved. Restart SentryLoom to apply realtime monitoring changes.");
   } catch (error) { toast(error.message, true); }
+});
+$("#request-maintenance-password").addEventListener("click", async () => {
+  const button = $("#request-maintenance-password");
+  const state = $("#maintenance-request-state");
+  button.disabled = true;
+  let remaining = 20;
+  button.textContent = `Waiting for HQ approval · ${remaining}s`;
+  state.textContent = "An HQ administrator must approve this request before the countdown ends.";
+  const countdown = setInterval(() => {
+    remaining = Math.max(0, remaining - 1);
+    button.textContent = `Waiting for HQ approval · ${remaining}s`;
+  }, 1000);
+  try {
+    const result = await api("/api/hq/maintenance/request", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "critical-settings",
+        reason: "Interactive maintenance requested from the endpoint Settings page"
+      })
+    });
+    $("#maintenance-password").value = result.password;
+    state.textContent = "Approved. The one-time password is loaded and will be cleared after one protected change.";
+    toast("HQ approved one maintenance action");
+  } catch (error) {
+    state.textContent = error.message;
+    toast(error.message, true);
+  } finally {
+    clearInterval(countdown);
+    button.disabled = false;
+    button.textContent = "Request 20-second administrator approval";
+  }
 });
 $("#discover-hq").addEventListener("click", async () => {
   const button = $("#discover-hq");
@@ -589,6 +636,10 @@ $("#hq-discovered").addEventListener("change", () => {
   $("#hq-url").value = server.url;
   $("#hq-fingerprint").value = server.fingerprint256;
 });
+$("#hq-url").addEventListener("input", () => {
+  if (hqEnrolled) return;
+  $("#enroll-hq").classList.remove("hidden");
+});
 $("#enroll-hq").addEventListener("click", async () => {
   const serverUrl = $("#hq-url").value.trim();
   const fingerprint256 = $("#hq-fingerprint").value.trim();
@@ -609,13 +660,19 @@ $("#enroll-hq").addEventListener("click", async () => {
     toast(error.message, true);
   } finally {
     button.disabled = false;
-    button.textContent = "Request administrator approval";
+    if (!button.classList.contains("hidden")) {
+      button.textContent = "Request administrator approval";
+    }
   }
 });
 $("#disconnect-hq").addEventListener("click", async () => {
   if (!confirm("Return this endpoint to standalone mode? HQ will stop receiving telemetry and issuing actions, but local protection will continue.")) return;
   try {
-    const status = await api("/api/hq/disconnect", { method: "POST", body: "{}" });
+    const status = await api("/api/hq/disconnect", {
+      method: "POST",
+      body: JSON.stringify({ maintenancePassword: maintenancePassword() })
+    });
+    clearMaintenancePassword();
     renderHq(status);
     $("#hq-url").value = "";
     $("#hq-fingerprint").value = "";
@@ -625,7 +682,11 @@ $("#disconnect-hq").addEventListener("click", async () => {
 $("#clear-firewall-rules").addEventListener("click", async () => {
   if (!confirm("Remove every outbound threat-IP rule created by SentryLoom?")) return;
   try {
-    const status = await api("/api/firewall-policy/clear", { method: "POST", body: "{}" });
+    const status = await api("/api/firewall-policy/clear", {
+      method: "POST",
+      body: JSON.stringify({ maintenancePassword: maintenancePassword() })
+    });
+    clearMaintenancePassword();
     dashboard.firewallPolicy = status;
     $("#clear-firewall-rules").textContent = `Clear SentryLoom firewall blocks (${status.blockedAddresses || 0})`;
     toast("SentryLoom firewall rules cleared");
@@ -645,8 +706,12 @@ $("#setting-usb-storage-block").addEventListener("change", async () => {
   try {
     const status = await api("/api/device-control/usb-storage", {
       method: "POST",
-      body: JSON.stringify({ blocked: requested })
+      body: JSON.stringify({
+        blocked: requested,
+        maintenancePassword: maintenancePassword()
+      })
     });
+    clearMaintenancePassword();
     renderDeviceControl(status);
     toast(requested ? "USB removable storage is blocked" : "USB removable storage access is restored");
   } catch (error) {
@@ -665,8 +730,12 @@ $("#apply-dns-profile").addEventListener("click", async () => {
   try {
     const status = await api("/api/dns-filtering/apply", {
       method: "POST",
-      body: JSON.stringify({ profileId: selected })
+      body: JSON.stringify({
+        profileId: selected,
+        maintenancePassword: maintenancePassword()
+      })
     });
+    clearMaintenancePassword();
     renderDnsFiltering(status);
     dashboard.config.dnsFiltering.selectedProfile = selected;
     toast("Encrypted ad-blocking DNS is active");
@@ -682,7 +751,11 @@ $("#restore-dns-profile").addEventListener("click", async () => {
   const button = $("#restore-dns-profile");
   button.disabled = true;
   try {
-    const status = await api("/api/dns-filtering/restore", { method: "POST", body: "{}" });
+    const status = await api("/api/dns-filtering/restore", {
+      method: "POST",
+      body: JSON.stringify({ maintenancePassword: maintenancePassword() })
+    });
+    clearMaintenancePassword();
     renderDnsFiltering(status);
     toast("Previous Windows DNS settings restored");
   } catch (error) {

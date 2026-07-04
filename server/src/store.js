@@ -123,6 +123,35 @@ export class HqStore {
       );
       CREATE INDEX IF NOT EXISTS idx_commands_device_status
         ON commands(device_id, status, created_at);
+
+      CREATE TABLE IF NOT EXISTS maintenance_passwords (
+        id TEXT PRIMARY KEY,
+        password_hash TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        uses_remaining INTEGER NOT NULL CHECK (uses_remaining > 0),
+        revoked_at TEXT,
+        source TEXT NOT NULL,
+        device_id TEXT REFERENCES devices(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_maintenance_passwords_active
+        ON maintenance_passwords(expires_at, revoked_at);
+
+      CREATE TABLE IF NOT EXISTS maintenance_requests (
+        id TEXT PRIMARY KEY,
+        device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+        action TEXT NOT NULL,
+        reason TEXT,
+        public_key TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('pending', 'approved', 'rejected', 'expired')),
+        requested_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        reviewed_at TEXT,
+        encrypted_password TEXT,
+        maintenance_password_id TEXT REFERENCES maintenance_passwords(id) ON DELETE SET NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_maintenance_requests_status
+        ON maintenance_requests(status, expires_at);
     `);
     return this;
   }
@@ -306,6 +335,207 @@ export class HqStore {
       token: enrollment.token,
       enrolledAt: enrollment.enrolledAt
     };
+  }
+
+  createMaintenancePassword(password, options = {}) {
+    const now = new Date();
+    const minutes = Math.max(1, Math.min(60, Number(options.minutes) || 10));
+    const uses = Math.max(1, Math.min(100, Number(options.uses) || 1));
+    const record = {
+      id: crypto.randomUUID(),
+      createdAt: now.toISOString(),
+      expiresAt: new Date(now.getTime() + minutes * 60000).toISOString(),
+      usesRemaining: uses,
+      source: String(options.source || "administrator").slice(0, 50),
+      deviceId: options.deviceId || null
+    };
+    this.database.prepare(`
+      INSERT INTO maintenance_passwords (
+        id, password_hash, created_at, expires_at, uses_remaining,
+        revoked_at, source, device_id
+      ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?)
+    `).run(
+      record.id,
+      digest(password),
+      record.createdAt,
+      record.expiresAt,
+      record.usesRemaining,
+      record.source,
+      record.deviceId
+    );
+    return record;
+  }
+
+  listMaintenancePasswords(limit = 100) {
+    return this.database.prepare(`
+      SELECT id, created_at, expires_at, uses_remaining, revoked_at, source, device_id
+      FROM maintenance_passwords
+      ORDER BY created_at DESC LIMIT ?
+    `).all(Math.max(1, Math.min(500, Number(limit) || 100))).map((row) => ({
+      id: row.id,
+      createdAt: row.created_at,
+      expiresAt: row.expires_at,
+      usesRemaining: row.uses_remaining,
+      revokedAt: row.revoked_at,
+      source: row.source,
+      deviceId: row.device_id,
+      active: !row.revoked_at && new Date(row.expires_at).getTime() > Date.now() && row.uses_remaining > 0
+    }));
+  }
+
+  revokeMaintenancePassword(id) {
+    return this.database.prepare(`
+      UPDATE maintenance_passwords SET revoked_at = ?
+      WHERE id = ? AND revoked_at IS NULL
+    `).run(new Date().toISOString(), id).changes > 0;
+  }
+
+  consumeMaintenancePassword(password, deviceId) {
+    const supplied = Buffer.from(digest(password), "hex");
+    const now = new Date().toISOString();
+    this.database.exec("BEGIN IMMEDIATE");
+    try {
+      const records = this.database.prepare(`
+        SELECT id, password_hash, uses_remaining
+        FROM maintenance_passwords
+        WHERE revoked_at IS NULL AND expires_at > ?
+          AND (device_id IS NULL OR device_id = ?)
+      `).all(now, deviceId);
+      const match = records.find((record) => {
+        const expected = Buffer.from(record.password_hash, "hex");
+        return supplied.length === expected.length && crypto.timingSafeEqual(supplied, expected);
+      });
+      if (!match) {
+        this.database.exec("ROLLBACK");
+        return null;
+      }
+      if (match.uses_remaining <= 1) {
+        this.database.prepare(`
+          UPDATE maintenance_passwords
+          SET revoked_at = ?
+          WHERE id = ?
+        `).run(now, match.id);
+      } else {
+        this.database.prepare(`
+          UPDATE maintenance_passwords
+          SET uses_remaining = uses_remaining - 1
+          WHERE id = ?
+        `).run(match.id);
+      }
+      this.database.exec("COMMIT");
+      return { id: match.id };
+    } catch (error) {
+      this.database.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  createMaintenanceRequest(deviceId, action, reason, publicKey, windowSeconds = 20) {
+    const device = this.database.prepare(
+      "SELECT id FROM devices WHERE id = ? AND revoked_at IS NULL"
+    ).get(deviceId);
+    if (!device) throw new Error("Managed device was not found");
+    const now = new Date();
+    const record = {
+      id: crypto.randomUUID(),
+      deviceId,
+      action: String(action || "critical-settings").slice(0, 100),
+      reason: String(reason || "").slice(0, 500),
+      publicKey: String(publicKey),
+      status: "pending",
+      requestedAt: now.toISOString(),
+      expiresAt: new Date(now.getTime() + Math.max(5, Math.min(60, windowSeconds)) * 1000).toISOString()
+    };
+    this.database.prepare(`
+      UPDATE maintenance_requests SET status = 'expired'
+      WHERE status = 'pending' AND expires_at <= ?
+    `).run(record.requestedAt);
+    this.database.prepare(`
+      INSERT INTO maintenance_requests (
+        id, device_id, action, reason, public_key, status,
+        requested_at, expires_at, reviewed_at, encrypted_password,
+        maintenance_password_id
+      ) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, NULL, NULL, NULL)
+    `).run(
+      record.id,
+      record.deviceId,
+      record.action,
+      record.reason,
+      record.publicKey,
+      record.requestedAt,
+      record.expiresAt
+    );
+    return record;
+  }
+
+  getMaintenanceRequest(id) {
+    const row = this.database.prepare(`
+      SELECT r.*, d.name AS device_name, p.expires_at AS password_expires_at
+      FROM maintenance_requests r
+      JOIN devices d ON d.id = r.device_id
+      LEFT JOIN maintenance_passwords p ON p.id = r.maintenance_password_id
+      WHERE r.id = ?
+    `).get(id);
+    if (!row) return null;
+    if (row.status === "pending" && new Date(row.expires_at).getTime() <= Date.now()) {
+      this.database.prepare(
+        "UPDATE maintenance_requests SET status = 'expired' WHERE id = ? AND status = 'pending'"
+      ).run(id);
+      row.status = "expired";
+    }
+    return {
+      id: row.id,
+      deviceId: row.device_id,
+      deviceName: row.device_name,
+      action: row.action,
+      reason: row.reason,
+      publicKey: row.public_key,
+      status: row.status,
+      requestedAt: row.requested_at,
+      expiresAt: row.expires_at,
+      reviewedAt: row.reviewed_at,
+      encryptedPassword: row.encrypted_password,
+      maintenancePasswordId: row.maintenance_password_id,
+      passwordExpiresAt: row.password_expires_at
+    };
+  }
+
+  listMaintenanceRequests(limit = 100) {
+    this.database.prepare(`
+      UPDATE maintenance_requests SET status = 'expired'
+      WHERE status = 'pending' AND expires_at <= ?
+    `).run(new Date().toISOString());
+    return this.database.prepare(`
+      SELECT r.id
+      FROM maintenance_requests r
+      ORDER BY CASE r.status WHEN 'pending' THEN 0 ELSE 1 END, r.requested_at DESC
+      LIMIT ?
+    `).all(Math.max(1, Math.min(500, Number(limit) || 100)))
+      .map((row) => this.getMaintenanceRequest(row.id));
+  }
+
+  reviewMaintenanceRequest(id, approved, options = {}) {
+    const request = this.getMaintenanceRequest(id);
+    if (!request || request.status !== "pending") {
+      throw new Error("Active maintenance request was not found");
+    }
+    if (new Date(request.expiresAt).getTime() <= Date.now()) {
+      throw new Error("The 20-second maintenance approval window expired");
+    }
+    const status = approved ? "approved" : "rejected";
+    this.database.prepare(`
+      UPDATE maintenance_requests
+      SET status = ?, reviewed_at = ?, encrypted_password = ?,
+          maintenance_password_id = ?
+      WHERE id = ? AND status = 'pending'
+    `).run(
+      status,
+      new Date().toISOString(),
+      approved ? options.encryptedPassword : null,
+      approved ? options.maintenancePasswordId : null,
+      id
+    );
+    return this.getMaintenanceRequest(id);
   }
 
   authenticateDevice(id, token) {

@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>SentryLoom HQ</title>
-  <link rel="stylesheet" href="/styles.css?v=0.4.0">
-  <link rel="stylesheet" href="/approvals.css?v=0.4.0">
-  <link rel="stylesheet" href="/device-details.css?v=0.4.0">
-  <link rel="stylesheet" href="/alerts.css?v=0.4.0">
+  <link rel="stylesheet" href="/styles.css?v=0.4.1">
+  <link rel="stylesheet" href="/approvals.css?v=0.4.1">
+  <link rel="stylesheet" href="/device-details.css?v=0.4.1">
+  <link rel="stylesheet" href="/alerts.css?v=0.4.1">
 </head>
 <body>
   <section class="login" id="login">
@@ -50,6 +50,53 @@
         </div>
         <div class="update-release" id="update-release">
           <div class="detail-loading">Loading update status…</div>
+        </div>
+      </section>
+      <section class="panel maintenance-panel">
+        <div class="panel-head">
+          <div><p>MAINTENANCE AUTHORIZATION</p><h2>Rotating endpoint passwords</h2></div>
+          <span>Required for critical settings, protection disablement, and uninstall</span>
+        </div>
+        <div class="maintenance-generator">
+          <div>
+            <strong>Generate the primary maintenance password</strong>
+            <small>Shown once, stored only as a hash, and automatically expires.</small>
+          </div>
+          <label>Lifetime
+            <select id="maintenance-minutes">
+              <option value="5">5 minutes</option>
+              <option value="10" selected>10 minutes</option>
+              <option value="30">30 minutes</option>
+              <option value="60">60 minutes</option>
+            </select>
+          </label>
+          <label>Uses
+            <select id="maintenance-uses">
+              <option value="1" selected>One use</option>
+              <option value="3">3 uses</option>
+              <option value="10">10 uses</option>
+            </select>
+          </label>
+          <button class="primary" id="generate-maintenance">Generate password</button>
+        </div>
+        <div class="maintenance-secret hidden" id="maintenance-secret">
+          <label>New maintenance password
+            <input id="generated-maintenance-password" readonly>
+          </label>
+          <button id="copy-maintenance-password">Copy</button>
+          <small>This value will disappear on refresh. Generate another if it is lost.</small>
+        </div>
+        <div class="maintenance-columns">
+          <div>
+            <h3>Active passwords</h3>
+            <div class="empty" id="maintenance-password-empty">No active maintenance passwords.</div>
+            <div id="maintenance-passwords"></div>
+          </div>
+          <div>
+            <h3>20-second client requests</h3>
+            <div class="empty" id="maintenance-request-empty">No endpoint is waiting for immediate approval.</div>
+            <div id="maintenance-requests"></div>
+          </div>
         </div>
       </section>
       <section class="panel approval-panel">
@@ -99,6 +146,6 @@
     </section>
   </dialog>
   <div class="toast" id="toast"></div>
-  <script type="module" src="/app.js?v=0.4.0"></script>
+  <script type="module" src="/app.js?v=0.4.1"></script>
 </body>
 </html>

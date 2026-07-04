@@ -5,14 +5,21 @@ import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { HqStore, hashAdminPassword, verifyAdminPassword } from "../src/store.js";
 import { buildAdminAlerts, createHqServer } from "../src/server.js";
-import { downloadHqPackage } from "../../src/lib/hq-client.js";
+import {
+  authorizeHqMaintenance,
+  downloadHqPackage,
+  requestHqMaintenancePassword
+} from "../../src/lib/hq-client.js";
+
+const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 test("HQ setup password updater hashes the chosen password without printing it", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "sentryloom-hq-password-"));
   const configPath = path.join(root, "config.json");
-  const password = "Chosen-Setup-Password-42!";
+  const password = "Chosen-Setup-Pässword-42!  ";
   await fs.writeFile(configPath, JSON.stringify({
     schemaVersion: 1,
     admin: {
@@ -24,10 +31,10 @@ test("HQ setup password updater hashes the chosen password without printing it",
   try {
     const result = spawnSync(process.execPath, [
       "--disable-warning=ExperimentalWarning",
-      path.resolve("server", "src", "set-admin-password.js"),
+      path.join(projectRoot, "server", "src", "set-admin-password.js"),
       configPath
     ], {
-      cwd: path.resolve("."),
+      cwd: projectRoot,
       encoding: "utf8",
       env: {
         ...process.env,
@@ -39,6 +46,20 @@ test("HQ setup password updater hashes the chosen password without printing it",
     const config = JSON.parse(await fs.readFile(configPath, "utf8"));
     assert.equal(verifyAdminPassword(password, config.admin), true);
     assert.equal(verifyAdminPassword("wrong-password", config.admin), false);
+    const verification = spawnSync(process.execPath, [
+      "--disable-warning=ExperimentalWarning",
+      path.join(projectRoot, "server", "src", "verify-admin-password.js"),
+      configPath
+    ], {
+      cwd: projectRoot,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        SENTRYLOOM_HQ_SETUP_ADMIN_PASSWORD: password
+      }
+    });
+    assert.equal(verification.status, 0, verification.stderr);
+    assert.equal(verification.stdout.includes(password), false);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
@@ -199,6 +220,65 @@ test("HQ enrolls, authenticates telemetry, and delivers allowlisted commands", a
       "Content-Type": "application/json",
       "X-SentryLoom-CSRF": login.csrf
     };
+
+    const generatedPasswordResponse = await fetch(`${origin}/api/admin/maintenance/passwords`, {
+      method: "POST",
+      headers: adminHeaders,
+      body: JSON.stringify({ minutes: 5, uses: 1 })
+    });
+    assert.equal(generatedPasswordResponse.status, 201);
+    const generatedPassword = await generatedPasswordResponse.json();
+    assert.match(generatedPassword.password, /^SL-[A-Za-z0-9_-]{32}$/);
+    const maintenanceCredentials = {
+      serverUrl: origin,
+      fingerprint256: "",
+      deviceId: enrollment.deviceId,
+      token: enrollment.token
+    };
+    assert.equal((await authorizeHqMaintenance(
+      maintenanceCredentials,
+      generatedPassword.password,
+      "critical-settings",
+      { allowHttp: true }
+    )).authorized, true);
+    await assert.rejects(
+      authorizeHqMaintenance(
+        maintenanceCredentials,
+        generatedPassword.password,
+        "critical-settings",
+        { allowHttp: true }
+      ),
+      /invalid, expired, used, or revoked/
+    );
+
+    const requestedPasswordPromise = requestHqMaintenancePassword(
+      maintenanceCredentials,
+      {
+        allowHttp: true,
+        action: "uninstall",
+        reason: "Test maintenance approval"
+      }
+    );
+    let maintenanceRequest;
+    for (let attempt = 0; attempt < 30 && !maintenanceRequest; attempt += 1) {
+      maintenanceRequest = store.listMaintenanceRequests()
+        .find((item) => item.status === "pending");
+      if (!maintenanceRequest) await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    assert.ok(maintenanceRequest);
+    const approveMaintenanceResponse = await fetch(
+      `${origin}/api/admin/maintenance/requests/${maintenanceRequest.id}/approve`,
+      { method: "POST", headers: adminHeaders, body: "{}" }
+    );
+    assert.equal(approveMaintenanceResponse.status, 200);
+    const requestedPassword = await requestedPasswordPromise;
+    assert.match(requestedPassword.password, /^SL-[A-Za-z0-9_-]{32}$/);
+    assert.equal((await authorizeHqMaintenance(
+      maintenanceCredentials,
+      requestedPassword.password,
+      "uninstall",
+      { allowHttp: true }
+    )).authorized, true);
 
     const automaticRequestResponse = await fetch(`${origin}/api/v1/enrollment-requests`, {
       method: "POST",

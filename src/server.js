@@ -160,7 +160,17 @@ export function createDashboardServer(engine, options = {}) {
           }));
           return;
         }
+        if (request.method === "POST" && url.pathname === "/api/hq/maintenance/request") {
+          const body = await bodyJson(request);
+          json(response, 200, await engine.requestMaintenancePassword({
+            action: String(body.action || "critical-settings").slice(0, 100),
+            reason: String(body.reason || "").slice(0, 500)
+          }));
+          return;
+        }
         if (request.method === "POST" && url.pathname === "/api/hq/disconnect") {
+          const body = await bodyJson(request);
+          await engine.authorizeMaintenance(body.maintenancePassword, "disconnect-hq");
           json(response, 200, await engine.disconnectHq());
           return;
         }
@@ -252,10 +262,13 @@ export function createDashboardServer(engine, options = {}) {
             json(response, 400, { error: "Choose a supported DNS filtering profile" });
             return;
           }
+          await engine.authorizeMaintenance(body.maintenancePassword, "dns-filtering-change");
           json(response, 200, await engine.applyDnsFiltering(body.profileId));
           return;
         }
         if (request.method === "POST" && url.pathname === "/api/dns-filtering/restore") {
+          const body = await bodyJson(request);
+          await engine.authorizeMaintenance(body.maintenancePassword, "dns-filtering-change");
           json(response, 200, await engine.restoreDnsFiltering());
           return;
         }
@@ -269,6 +282,7 @@ export function createDashboardServer(engine, options = {}) {
         }
         if (request.method === "POST" && url.pathname === "/api/device-control/usb-storage") {
           const body = await bodyJson(request);
+          await engine.authorizeMaintenance(body.maintenancePassword, "usb-storage-change");
           json(response, 200, await engine.setUsbStorageBlocked(Boolean(body.blocked)));
           return;
         }
@@ -282,6 +296,8 @@ export function createDashboardServer(engine, options = {}) {
           return;
         }
         if (request.method === "POST" && url.pathname === "/api/firewall-policy/clear") {
+          const body = await bodyJson(request);
+          await engine.authorizeMaintenance(body.maintenancePassword, "firewall-policy-change");
           json(response, 200, await engine.clearFirewallPolicy());
           return;
         }
@@ -326,6 +342,12 @@ export function createDashboardServer(engine, options = {}) {
                 ? engine.config.monitoring.firewallBlockHighConfidence : Boolean(body.monitoring.firewallBlockHighConfidence)
             }
           };
+          const criticalChanged = ["protection", "scanner", "monitoring"].some((section) =>
+            JSON.stringify(allowed[section]) !== JSON.stringify(engine.config[section])
+          );
+          if (criticalChanged) {
+            await engine.authorizeMaintenance(body.maintenancePassword, "critical-settings");
+          }
           json(response, 200, await engine.updateConfig(allowed));
           return;
         }

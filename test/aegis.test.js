@@ -47,12 +47,41 @@ const { HqStore } = await import("../server/src/store.js");
 const { createHqServer } = await import("../server/src/server.js");
 const {
   acquireHqConnectorLease,
+  hqDiscoveryBroadcastAddresses,
   HqConnector,
   pollHqEnrollment,
   probeHq,
   requestHqEnrollment
 } = await import("../src/lib/hq-client.js");
 const { loadHqCredentials } = await import("../src/lib/hq-credential-store.js");
+
+test("HQ discovery targets every active IPv4 subnet and ignores internal adapters", () => {
+  assert.deepEqual(hqDiscoveryBroadcastAddresses({
+    Ethernet: [{
+      address: "192.168.50.24",
+      netmask: "255.255.255.0",
+      family: "IPv4",
+      internal: false
+    }],
+    Vpn: [{
+      address: "10.44.7.9",
+      netmask: "255.255.0.0",
+      family: 4,
+      internal: false
+    }],
+    Loopback: [{
+      address: "127.0.0.1",
+      netmask: "255.0.0.0",
+      family: "IPv4",
+      internal: true
+    }]
+  }), [
+    "255.255.255.255",
+    "127.0.0.1",
+    "192.168.50.255",
+    "10.44.255.255"
+  ]);
+});
 const {
   parseClamHashLine,
   parseClamCvd,
