@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SentryLoom HQ</title>
+  <link rel="stylesheet" href="/styles.css?v=0.4.0">
+  <link rel="stylesheet" href="/approvals.css?v=0.4.0">
+  <link rel="stylesheet" href="/device-details.css?v=0.4.0">
+  <link rel="stylesheet" href="/alerts.css?v=0.4.0">
+</head>
+<body>
+  <section class="login" id="login">
+    <form id="login-form">
+      <div class="mark">SL</div>
+      <p>FLEET SECURITY</p>
+      <h1>SentryLoom HQ</h1>
+      <label>Administrator password<input id="password" type="password" autocomplete="current-password" required></label>
+      <button>Sign in</button>
+      <small id="login-error"></small>
+    </form>
+  </section>
+
+  <div class="shell hidden" id="shell">
+    <aside>
+      <div class="brand"><span>SL</span><strong>SentryLoom<small>HQ Management</small></strong></div>
+      <nav><button class="active">Fleet overview</button></nav>
+      <div class="server-state"><i></i> Server online</div>
+    </aside>
+    <main>
+      <header>
+        <div><p>ENDPOINT OPERATIONS</p><h1>Managed devices</h1></div>
+        <button class="primary" id="refresh-fleet">Refresh fleet</button>
+      </header>
+      <section class="summary">
+        <article><small>ENROLLED</small><strong id="device-count">0</strong><span>devices</span></article>
+        <article><small>ONLINE NOW</small><strong id="online-count">0</strong><span>last 60 seconds</span></article>
+        <article><small>PENDING APPROVAL</small><strong id="pending-count">0</strong><span>enrollment requests</span></article>
+        <article><small>ACTIVE ALERTS</small><strong id="alert-count">0</strong><span>failures and detections</span></article>
+      </section>
+      <section class="panel alert-panel">
+        <div class="panel-head"><div><p>NOTIFICATIONS</p><h2>Operations alerts</h2></div><span id="alert-updated">No active alerts</span></div>
+        <div class="empty" id="alert-empty">No client failures or detections require attention.</div>
+        <div class="alerts" id="alerts" aria-live="polite"></div>
+      </section>
+      <section class="panel update-panel">
+        <div class="panel-head">
+          <div><p>CLIENT RELEASES</p><h2>Managed updates</h2></div>
+          <span id="update-policy">Checking signed update repository…</span>
+        </div>
+        <div class="update-release" id="update-release">
+          <div class="detail-loading">Loading update status…</div>
+        </div>
+      </section>
+      <section class="panel approval-panel">
+        <div class="panel-head"><div><p>ENROLLMENT</p><h2>Approval queue</h2></div><span>Review devices before management begins</span></div>
+        <div class="empty" id="approval-empty">No devices are waiting for approval.</div>
+        <div class="approvals" id="approvals"></div>
+      </section>
+      <section class="panel">
+        <div class="panel-head"><div><p>FLEET</p><h2>Endpoint status</h2></div><span id="updated">Waiting for telemetry</span></div>
+        <div class="empty" id="empty">No clients are enrolled. Approve an enrollment request to add the first endpoint.</div>
+        <div class="devices" id="devices"></div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="device-dialog" class="device-dialog">
+    <div class="device-dialog-head">
+      <div>
+        <p>ENDPOINT OPERATIONS</p>
+        <h2 id="device-name">Managed device</h2>
+        <span id="device-meta">Loading endpoint telemetry…</span>
+      </div>
+      <div class="live-indicator" id="device-live"><i></i><span>Waiting for telemetry</span></div>
+      <button class="close" data-close aria-label="Close">×</button>
+    </div>
+    <div class="device-details" id="device-details" aria-live="polite">
+      <div class="detail-loading">Loading complete endpoint state…</div>
+    </div>
+    <section class="remote-actions">
+      <div class="section-heading">
+        <div><p>CONTROL</p><h3>Remote response actions</h3></div>
+        <span>Only predefined SentryLoom actions can be sent</span>
+      </div>
+      <div class="command-grid">
+        <button data-command="scan.quick">Quick scan</button>
+        <button data-command="scan.full">Full scan</button>
+        <button data-command="scan.startup">Startup scan</button>
+        <button data-command="scan.processes">Process scan</button>
+        <button data-command="scan.external">External drives</button>
+        <button data-command="scan.cancel">Cancel scan</button>
+        <button data-command="update.databases">Update databases</button>
+        <button data-command="client.update">Update client</button>
+        <button data-command="protection.fix-all">Apply safe Fix All</button>
+        <button data-command="protection.restart">Restart protection</button>
+      </div>
+      <div class="commands" id="command-history"></div>
+    </section>
+  </dialog>
+  <div class="toast" id="toast"></div>
+  <script type="module" src="/app.js?v=0.4.0"></script>
+</body>
+</html>

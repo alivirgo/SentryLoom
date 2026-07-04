@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "hqName": "SentryLoom HQ",
+  "host": "0.0.0.0",
+  "port": 8443,
+  "publicHost": "security-hq.example.local",
+  "databasePath": "data/sentryloom-hq.sqlite",
+  "tls": {
+    "pfxPath": "data/sentryloom-hq.pfx",
+    "password": "set-during-initialization",
+    "fingerprint256": "SHA256-FINGERPRINT-WITHOUT-COLONS"
+  },
+  "admin": {
+    "iterations": 310000,
+    "salt": "base64-salt",
+    "passwordHash": "base64-pbkdf2-sha256-hash"
+  },
+  "discovery": {
+    "enabled": true,
+    "port": 32110
+  },
+  "telemetryRetentionDays": 30,
+  "updates": {
+    "directory": "updates",
+    "autoDeploy": false
+  }
+}

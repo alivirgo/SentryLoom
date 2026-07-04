@@ -1,0 +1,415 @@
+#define MyAppName "SentryLoom Endpoint Security"
+#define MyAppVersion "0.16.0"
+#define MyAppPublisher "NUC7 Studios"
+#define MyAppExeName "SentryLoom.exe"
+
+[Setup]
+AppId={{9C5046EF-19C0-4A40-91E8-B208A383D827}
+AppName={#MyAppName}
+AppVersion={#MyAppVersion}
+AppVerName={#MyAppName} {#MyAppVersion}
+AppPublisher={#MyAppPublisher}
+DefaultDirName={autopf}\SentryLoom
+DefaultGroupName=SentryLoom
+DisableProgramGroupPage=yes
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
+PrivilegesRequired=admin
+OutputDir=..\dist
+OutputBaseFilename=SentryLoom-Setup-{#MyAppVersion}
+Compression=lzma2/ultra64
+SolidCompression=yes
+WizardStyle=modern dynamic
+CloseApplications=force
+RestartApplications=no
+SetupLogging=yes
+UninstallDisplayName={#MyAppName}
+VersionInfoVersion={#MyAppVersion}
+VersionInfoProductName={#MyAppName}
+VersionInfoCompany={#MyAppPublisher}
+VersionInfoDescription=SentryLoom guided security installer
+VersionInfoCopyright=Copyright (c) 2026 NUC7 Studios
+SetupIconFile=..\assets\SentryLoom.ico
+UninstallDisplayIcon={app}\{#MyAppExeName}
+
+[Files]
+Source: "..\Stop-SentryLoom.ps1"; Flags: dontcopy noencryption
+Source: "..\build\output\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\src\*"; DestDir: "{app}\src"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\signatures\base.json"; DestDir: "{app}\signatures"; Flags: ignoreversion
+Source: "..\package.json"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\Start-SentryLoom.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\Register-SentryLoom.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\Remove-SentryLoom.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\Set-SentryLoomDns.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\Set-SentryLoomUsbStorage.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\Show-SentryLoomNotification.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\Update-SentryLoom.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\SECURITY.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\docs\*"; DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs createallsubdirs
+[Run]
+Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Description: "Open SentryLoom security console"; Flags: postinstall nowait skipifsilent
+
+[UninstallRun]
+Filename: "{code:GetPowerShellPath}"; Parameters: "-NoLogo -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File ""{app}\Remove-SentryLoom.ps1"""; WorkingDir: "{app}"; Flags: runhidden waituntilterminated; RunOnceId: "SentryLoomCleanup"
+
+[Code]
+var
+  CredentialPage: TInputQueryWizardPage;
+  DeploymentPage: TInputOptionWizardPage;
+  HqPage: TInputQueryWizardPage;
+  AuthLink: TNewStaticText;
+  InstallSummaryPage: TOutputMsgWizardPage;
+  SetupWarnings: String;
+  CredentialConfigured: Boolean;
+  HqEnrollmentConfigured: Boolean;
+
+function SetEnvironmentVariable(lpName, lpValue: String): Boolean;
+  external 'SetEnvironmentVariableW@kernel32.dll stdcall';
+
+function GetPowerShellPath(Param: String): String;
+begin
+  Result := ExpandConstant('{pf64}\PowerShell\7\pwsh.exe');
+  if not FileExists(Result) then
+    Result := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+end;
+
+function GetNodePath: String;
+begin
+  Result := ExpandConstant('{pf64}\nodejs\node.exe');
+end;
+
+function GetWingetPath: String;
+begin
+  Result := ExpandConstant('{localappdata}\Microsoft\WindowsApps\winget.exe');
+  if not FileExists(Result) then
+    Result := 'winget.exe';
+end;
+
+procedure OpenAuthPortal(Sender: TObject);
+var
+  ResultCode: Integer;
+begin
+  ShellExec('', 'https://auth.abuse.ch/', '', '', SW_SHOWNORMAL, ewNoWait, ResultCode);
+end;
+
+procedure InitializeWizard;
+var
+  Intro: String;
+begin
+  Intro :=
+    'SentryLoom keeps scanning and telemetry on this PC. Setup will:' + #13#10 + #13#10 +
+    '  • install the supported Node.js runtime when needed' + #13#10 +
+    '  • install the official Cisco ClamAV engine when needed' + #13#10 +
+    '  • download and verify current threat databases' + #13#10 +
+    '  • register elevated background protection, daily quick scans, and weekly idle full scans' + #13#10 +
+    '  • install reversible DNS and USB removable-storage control helpers' + #13#10 +
+    '  • create a native-style SentryLoom application shortcut' + #13#10 + #13#10 +
+    'Internet access is required during installation. No downloaded database or development tool is embedded in this setup file.';
+
+  InstallSummaryPage := CreateOutputMsgPage(
+    wpWelcome,
+    'A complete, low-friction setup',
+    'SentryLoom configures the security engine for you.',
+    Intro);
+
+  DeploymentPage := CreateInputOptionPage(
+    InstallSummaryPage.ID,
+    'Choose endpoint management',
+    'How should this SentryLoom endpoint be managed?',
+    'Standalone mode keeps all management on this PC. Managed mode enrolls the endpoint with an on-premises SentryLoom HQ server.',
+    True,
+    False);
+  DeploymentPage.Add('Standalone endpoint (recommended for personal devices)');
+  DeploymentPage.Add('Managed endpoint connected to SentryLoom HQ');
+  DeploymentPage.SelectedValueIndex := 0;
+
+  HqPage := CreateInputQueryPage(
+    DeploymentPage.ID,
+    'Request SentryLoom HQ management',
+    'Submit this endpoint for administrator approval',
+    'Leave the URL blank to discover SentryLoom HQ automatically on this network. The endpoint remains fully protected while approval is pending.');
+  HqPage.Add('HQ server URL (optional; https://server:8443):', False);
+  HqPage.Add('Certificate SHA-256 fingerprint (optional):', False);
+
+  CredentialPage := CreateInputQueryPage(
+    HqPage.ID,
+    'Optional community threat intelligence',
+    'Connect MalwareBazaar, URLhaus, and ThreatFox',
+    'Create a free abuse.ch account, copy your Auth-Key, and paste it below. You may leave it blank and add it later in Settings.');
+  CredentialPage.Add('abuse.ch Auth-Key:', True);
+
+  AuthLink := TNewStaticText.Create(WizardForm);
+  AuthLink.Parent := CredentialPage.Surface;
+  AuthLink.Caption := 'Open the official abuse.ch Authentication Portal';
+  AuthLink.Cursor := crHand;
+  AuthLink.Font.Color := clBlue;
+  AuthLink.Font.Style := [fsUnderline];
+  AuthLink.Top := CredentialPage.Edits[0].Top + CredentialPage.Edits[0].Height + ScaleY(18);
+  AuthLink.Left := CredentialPage.Edits[0].Left;
+  AuthLink.OnClick := @OpenAuthPortal;
+end;
+
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := (PageID = HqPage.ID) and (DeploymentPage.SelectedValueIndex = 0);
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+  if (CurPageID = HqPage.ID) and (DeploymentPage.SelectedValueIndex = 1) then
+  begin
+    if (Trim(HqPage.Values[0]) <> '') and
+       (Pos('https://', Lowercase(Trim(HqPage.Values[0]))) <> 1) then
+    begin
+      MsgBox('Enter an HTTPS SentryLoom HQ URL, or leave it blank for automatic discovery.', mbError, MB_OK);
+      Result := False;
+      Exit;
+    end;
+    if (Trim(HqPage.Values[1]) <> '') and (Length(Trim(HqPage.Values[1])) <> 64) then
+    begin
+      MsgBox('Enter the 64-character SHA-256 certificate fingerprint shown by SentryLoom HQ, or leave it blank for automatic certificate pinning.', mbError, MB_OK);
+      Result := False;
+    end;
+  end;
+end;
+
+function RunHidden(FileName, Parameters, WorkingDirectory: String; var ResultCode: Integer): Boolean;
+begin
+  Result := Exec(FileName, Parameters, WorkingDirectory, SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
+procedure RequireSuccessfulRun(DisplayName, FileName, Parameters, WorkingDirectory: String);
+var
+  ResultCode: Integer;
+begin
+  WizardForm.StatusLabel.Caption := DisplayName;
+  WizardForm.Update;
+  if (not RunHidden(FileName, Parameters, WorkingDirectory, ResultCode)) or (ResultCode <> 0) then
+    RaiseException(DisplayName + ' failed. Exit code: ' + IntToStr(ResultCode));
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
+  StopScript, FailureLog, Details: String;
+  DetailsAnsi: AnsiString;
+begin
+  Result := '';
+  NeedsRestart := False;
+  WizardForm.StatusLabel.Caption := 'Stopping the previous SentryLoom version…';
+  WizardForm.Update;
+  ExtractTemporaryFile('Stop-SentryLoom.ps1');
+  StopScript := ExpandConstant('{tmp}\Stop-SentryLoom.ps1');
+  FailureLog := ExpandConstant('{tmp}\SentryLoom-Stop-Error.txt');
+  if (not RunHidden(
+    GetPowerShellPath(''),
+    '-NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "' +
+      StopScript + '" -InstallRoot "' + ExpandConstant('{app}') + '" -FailureLogPath "' + FailureLog + '"',
+    ExpandConstant('{tmp}'),
+    ResultCode)) or (ResultCode <> 0) then
+  begin
+    Details := '';
+    DetailsAnsi := '';
+    if FileExists(FailureLog) and LoadStringFromFile(FailureLog, DetailsAnsi) then
+      Details := String(DetailsAnsi);
+    if Details = '' then
+      Details := 'No diagnostic details were produced.';
+    Result :=
+      'Setup could not stop the previous SentryLoom instance.' + #13#10 + #13#10 +
+      Details + #13#10 + #13#10 + 'Exit code: ' + IntToStr(ResultCode);
+  end;
+end;
+
+procedure InstallPrerequisites;
+var
+  Winget, CommonArguments: String;
+begin
+  Winget := GetWingetPath;
+  CommonArguments := ' --exact --source winget --silent --accept-package-agreements --accept-source-agreements --disable-interactivity';
+
+  if not FileExists(GetNodePath) then
+    RequireSuccessfulRun(
+      'Installing the supported Node.js runtime…',
+      Winget,
+      'install --id OpenJS.NodeJS.LTS' + CommonArguments,
+      ExpandConstant('{tmp}'));
+
+  if not FileExists(ExpandConstant('{pf64}\ClamAV\clamscan.exe')) then
+    RequireSuccessfulRun(
+      'Installing the official ClamAV scanning engine…',
+      Winget,
+      'install --id Cisco.ClamAV' + CommonArguments,
+      ExpandConstant('{tmp}'));
+end;
+
+procedure SaveThreatCredential;
+var
+  ResultCode: Integer;
+begin
+  CredentialPage.Values[0] := Trim(CredentialPage.Values[0]);
+  if CredentialPage.Values[0] = '' then
+    Exit;
+  CredentialConfigured := True;
+  WizardForm.StatusLabel.Caption := 'Encrypting your threat-intelligence credential…';
+  WizardForm.Update;
+  SetEnvironmentVariable('SENTRYLOOM_ABUSECH_KEY', CredentialPage.Values[0]);
+  try
+    if (not RunHidden(
+      GetNodePath,
+      '--disable-warning=ExperimentalWarning "' + ExpandConstant('{app}\src\cli.js') + '" credentials import-env',
+      ExpandConstant('{app}'),
+      ResultCode)) or (ResultCode <> 0) then
+    begin
+      CredentialConfigured := False;
+      SetupWarnings := SetupWarnings + 'The abuse.ch Auth-Key was not accepted. Add it later in SentryLoom Settings.' + #13#10;
+    end;
+  finally
+    SetEnvironmentVariable('SENTRYLOOM_ABUSECH_KEY', '');
+    CredentialPage.Values[0] := '';
+  end;
+end;
+
+procedure SaveHqEnrollment;
+var
+  ResultCode: Integer;
+  FailureLog, Details: String;
+  DetailsAnsi: AnsiString;
+begin
+  if DeploymentPage.SelectedValueIndex <> 1 then
+    Exit;
+  WizardForm.StatusLabel.Caption := 'Requesting SentryLoom HQ administrator approval…';
+  WizardForm.Update;
+  SetEnvironmentVariable('SENTRYLOOM_HQ_URL', Trim(HqPage.Values[0]));
+  SetEnvironmentVariable('SENTRYLOOM_HQ_FINGERPRINT', Uppercase(Trim(HqPage.Values[1])));
+  FailureLog := ExpandConstant('{tmp}\SentryLoom-HQ-Enrollment-Error.txt');
+  DeleteFile(FailureLog);
+  SetEnvironmentVariable('SENTRYLOOM_FAILURE_LOG', FailureLog);
+  try
+    if (not RunHidden(
+      GetNodePath,
+      '--disable-warning=ExperimentalWarning "' + ExpandConstant('{app}\src\cli.js') + '" hq request-env',
+      ExpandConstant('{app}'),
+      ResultCode)) or (ResultCode <> 0) then
+    begin
+      HqEnrollmentConfigured := False;
+      Details := '';
+      DetailsAnsi := '';
+      if FileExists(FailureLog) and LoadStringFromFile(FailureLog, DetailsAnsi) then
+        Details := Trim(String(DetailsAnsi));
+      if Details = '' then
+        Details := 'Setup could not submit the HQ approval request.';
+      SetupWarnings := SetupWarnings +
+        'HQ approval was not requested: ' + Details + #13#10 +
+        'Local protection is installed. Use Settings → SentryLoom HQ to retry.' + #13#10;
+    end
+    else
+    begin
+      HqEnrollmentConfigured := True;
+      SetupWarnings := SetupWarnings +
+        'This endpoint is waiting for approval in the SentryLoom HQ console. Local protection is already active.' + #13#10;
+    end;
+  finally
+    SetEnvironmentVariable('SENTRYLOOM_HQ_URL', '');
+    SetEnvironmentVariable('SENTRYLOOM_HQ_FINGERPRINT', '');
+    SetEnvironmentVariable('SENTRYLOOM_FAILURE_LOG', '');
+    HqPage.Values[1] := '';
+  end;
+end;
+
+procedure RegisterProtection;
+var
+  ResultCode: Integer;
+  FailureLog, Details: String;
+  DetailsAnsi: AnsiString;
+begin
+  WizardForm.StatusLabel.Caption := 'Registering elevated realtime and scheduled protection…';
+  WizardForm.Update;
+  if (not RunHidden(
+    GetPowerShellPath(''),
+    '-NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "' +
+      ExpandConstant('{app}\Register-SentryLoom.ps1') + '" -SystemWideProtection -FailureLogPath "' +
+      ExpandConstant('{tmp}\SentryLoom-Register-Error.txt') + '"',
+    ExpandConstant('{app}'),
+    ResultCode)) or (ResultCode <> 0) then
+  begin
+    FailureLog := ExpandConstant('{tmp}\SentryLoom-Register-Error.txt');
+    Details := '';
+    if FileExists(FailureLog) then
+    begin
+      DetailsAnsi := '';
+      if LoadStringFromFile(FailureLog, DetailsAnsi) then
+        Details := String(DetailsAnsi);
+    end;
+    if Details = '' then
+      Details := 'No diagnostic details were produced.';
+    RaiseException(
+      'Registering elevated realtime and scheduled protection failed.' + #13#10 + #13#10 +
+      Details + #13#10 + #13#10 + 'Exit code: ' + IntToStr(ResultCode));
+  end;
+end;
+
+procedure DownloadDatabases;
+var
+  ResultCode: Integer;
+  Cli, Sources: String;
+begin
+  Cli := '"' + ExpandConstant('{app}\src\cli.js') + '"';
+  if CredentialConfigured then
+    Sources := 'all'
+  else
+    Sources := 'clamav';
+
+  WizardForm.StatusLabel.Caption := 'Downloading and verifying current threat databases…';
+  WizardForm.Update;
+  if (not RunHidden(
+    GetNodePath,
+    '--disable-warning=ExperimentalWarning ' + Cli + ' update ' + Sources,
+    ExpandConstant('{app}'),
+    ResultCode)) or (ResultCode <> 0) then
+    SetupWarnings := SetupWarnings + 'Some threat databases could not be downloaded. Use Settings → Virus databases to retry.' + #13#10;
+
+  if Sources <> 'all' then
+  begin
+    RunHidden(
+      GetNodePath,
+      '--disable-warning=ExperimentalWarning ' + Cli + ' update feodotracker',
+      ExpandConstant('{app}'),
+      ResultCode);
+  end;
+end;
+
+procedure RemoveLegacyInstallation;
+var
+  ResultCode: Integer;
+begin
+  RunHidden(ExpandConstant('{sys}\schtasks.exe'), '/End /TN "Aegis Offline AV - Realtime Protection"', '', ResultCode);
+  RunHidden(ExpandConstant('{sys}\schtasks.exe'), '/Delete /F /TN "Aegis Offline AV - Realtime Protection"', '', ResultCode);
+  RunHidden(ExpandConstant('{sys}\schtasks.exe'), '/Delete /F /TN "Aegis Offline AV - Daily Quick Scan"', '', ResultCode);
+end;
+
+procedure StopExistingProtection;
+var
+  ResultCode: Integer;
+begin
+  RunHidden(ExpandConstant('{sys}\schtasks.exe'), '/End /TN "SentryLoom - Realtime Protection"', '', ResultCode);
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssInstall then
+    StopExistingProtection;
+  if CurStep = ssPostInstall then
+  begin
+    RemoveLegacyInstallation;
+    InstallPrerequisites;
+    SaveThreatCredential;
+    SaveHqEnrollment;
+    DownloadDatabases;
+    RegisterProtection;
+    if SetupWarnings <> '' then
+      MsgBox('SentryLoom installed successfully.' + #13#10 + #13#10 + SetupWarnings, mbInformation, MB_OK);
+  end;
+end;

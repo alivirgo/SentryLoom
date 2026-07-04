@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SentryLoom Endpoint Security</title>
+  <link rel="icon" type="image/png" href="/sentryloom-icon.png">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <a class="brand" href="#overview" aria-label="SentryLoom overview">
+        <img class="brand-mark" src="/sentryloom-icon.png" alt="">
+        <span><strong>SentryLoom</strong><small>Endpoint Security</small></span>
+      </a>
+      <nav>
+        <button class="nav active" data-page="overview" title="Overview"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5 12 4l8 6.5V20H4Z"/><path d="M9 20v-6h6v6"/></svg></span>Overview</button>
+        <button class="nav" data-page="scan" title="Scan"><span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 4 4"/></svg></span>Scan</button>
+        <button class="nav" data-page="quarantine" title="Quarantine"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v13H4Z"/><path d="M3 4h18v3H3Zm6 8h6"/></svg></span>Quarantine <b id="nav-quarantine">0</b></button>
+        <button class="nav" data-page="activity" title="Activity"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r=".75"/><circle cx="4" cy="12" r=".75"/><circle cx="4" cy="18" r=".75"/></svg></span>Activity</button>
+        <button class="nav" data-page="settings" title="Settings"><span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.5"/><circle cx="12" cy="12" r="8"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></span>Settings</button>
+      </nav>
+      <div class="offline-badge"><i></i> Protected locally</div>
+    </aside>
+
+    <main>
+      <header>
+        <div>
+          <p class="eyebrow">ENDPOINT SECURITY</p>
+          <h1 id="page-title">Overview</h1>
+        </div>
+        <div class="header-actions">
+          <span id="engine-version">Engine</span>
+          <button class="icon-button" id="theme-toggle" title="Use light theme" aria-label="Use light theme"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+          <button class="icon-button" id="refresh" title="Refresh status" aria-label="Refresh status"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 8a8 8 0 1 0 1 6"/><path d="M19 3v5h-5"/></svg></button>
+          <button class="icon-button close-button" id="exit-app" title="Close SentryLoom console" aria-label="Close application"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
+        </div>
+      </header>
+
+      <section class="page active" id="page-overview">
+        <article class="hero" id="health-hero">
+          <div class="shield-wrap">
+            <div class="pulse"></div>
+            <div class="shield">✓</div>
+          </div>
+          <div class="hero-copy">
+            <p class="eyebrow">SYSTEM STATUS</p>
+            <h2 id="health-title">Loading protection status…</h2>
+            <p id="health-detail">Verifying local signatures, audit integrity, and realtime monitoring.</p>
+            <div class="hero-actions">
+              <button class="primary" data-scan="quick">Run quick scan</button>
+              <button class="secondary" data-page-link="scan">Scan options</button>
+            </div>
+          </div>
+          <div class="security-score-card" id="security-score-card">
+            <div><strong id="security-score">—</strong><span>/100</span></div>
+            <small>Security score</small>
+            <b id="security-grade">Calculating</b>
+          </div>
+        </article>
+
+        <div class="stat-grid">
+          <article class="stat"><span class="stat-icon teal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.6 2.8 8.2 7 10 4.2-1.8 7-5.4 7-10V6Z"/><path d="m9 12 2 2 4-4"/></svg></span><div><small>REALTIME MONITOR</small><strong id="realtime-stat">Checking</strong></div></article>
+          <article class="stat"><span class="stat-icon blue"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="2"/><circle cx="18" cy="7" r="2"/><circle cx="18" cy="17" r="2"/><path d="m8 11 8-3m-8 5 8 3"/></svg></span><div><small>NETWORK MONITOR</small><strong id="network-stat">Checking</strong></div></article>
+          <article class="stat"><span class="stat-icon violet"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-5 4 10 2-5h6"/></svg></span><div><small>BEHAVIOR MONITOR</small><strong id="behavior-stat">Checking</strong></div></article>
+          <article class="stat"><span class="stat-icon blue"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></svg></span><div><small>LOCAL SIGNATURES</small><strong id="signature-stat">Checking</strong></div></article>
+          <article class="stat"><span class="stat-icon amber"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14v13H5Z"/><path d="M4 4h16v3H4Zm5 8h6"/></svg></span><div><small>QUARANTINED</small><strong id="quarantine-stat">0 items</strong></div></article>
+          <article class="stat"><span class="stat-icon violet"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/></svg></span><div><small>AUDIT INTEGRITY</small><strong id="audit-stat">Checking</strong></div></article>
+        </div>
+
+        <article class="panel action-center">
+          <div class="panel-heading">
+            <div><p class="eyebrow">ACTION CENTER</p><h3>Recommended actions</h3></div>
+            <span class="status-pill" id="action-count">CHECKING</span>
+          </div>
+          <div class="action-list" id="action-list">Evaluating protection controls…</div>
+          <div class="action-footer">
+            <span id="runtime-stat">Engine performance is loading.</span>
+            <button class="primary hidden" id="fix-all">Fix all</button>
+          </div>
+        </article>
+
+        <div class="two-column">
+          <article class="panel">
+            <div class="panel-heading"><div><p class="eyebrow">LAST SCAN</p><h3 id="last-scan-title">No scans yet</h3></div><span class="status-pill" id="last-scan-pill">READY</span></div>
+            <div class="metrics">
+              <div><strong id="last-files">—</strong><span>Files scanned</span></div>
+              <div><strong id="last-threats">—</strong><span>Detections</span></div>
+              <div><strong id="last-duration">—</strong><span>Duration</span></div>
+            </div>
+          </article>
+          <article class="panel">
+            <div class="panel-heading"><div><p class="eyebrow">RECENT ACTIVITY</p><h3>Security timeline</h3></div></div>
+            <div id="recent-events" class="timeline empty">No recent security events.</div>
+          </article>
+        </div>
+      </section>
+
+      <section class="page" id="page-scan">
+        <div class="scan-layout">
+          <article class="panel scan-card">
+            <p class="eyebrow">FAST CHECK</p><h2>Quick scan</h2>
+            <p>Scans downloads, desktop, documents, and temporary files.</p>
+            <button class="primary" data-scan="quick">Start quick scan</button>
+          </article>
+          <article class="panel scan-card">
+            <p class="eyebrow">COMPLETE CHECK</p><h2>Full system scan</h2>
+            <p>Walks the Windows system drive. This can take considerable time.</p>
+            <button class="secondary" data-scan="full">Start full scan</button>
+          </article>
+          <article class="panel scan-specials wide">
+            <div class="panel-heading"><div><p class="eyebrow">FOCUSED CHECKS</p><h3>System entry points</h3></div></div>
+            <div class="scan-option-list">
+              <button class="scan-option" data-scan="startup"><span><strong>Startup scan</strong><small>Inspect executable persistence entries and startup items.</small></span><b>Run scan</b></button>
+              <button class="scan-option" data-scan="processes"><span><strong>Active-process scan</strong><small>Inspect executable images backing currently running processes.</small></span><b>Run scan</b></button>
+              <button class="scan-option" data-scan="external"><span><strong>External-drive scan</strong><small>Inspect all currently attached removable drives.</small></span><b>Run scan</b></button>
+            </div>
+          </article>
+          <article class="panel scan-card wide">
+            <p class="eyebrow">TARGETED CHECK</p><h2>Custom path</h2>
+            <p>Enter an absolute file or folder path to inspect.</p>
+            <div class="path-row">
+              <input id="custom-path" aria-label="File or folder path" placeholder="C:\Users\You\Downloads">
+              <div class="path-actions">
+                <button class="secondary" id="browse-file">Browse file</button>
+                <button class="secondary" id="browse-folder">Browse folder</button>
+                <button class="primary" id="custom-scan">Scan path</button>
+              </div>
+            </div>
+          </article>
+        </div>
+        <article class="panel progress-panel" id="scan-progress" aria-live="polite">
+          <div class="panel-heading"><div><p class="eyebrow">SCANNER</p><h3 id="progress-title">Scanner ready</h3></div><button class="danger-text hidden" id="cancel-scan">Cancel</button></div>
+          <div class="progress-track"><div id="progress-bar"></div></div>
+          <p class="mono truncate" id="progress-file">Choose a scan to begin.</p>
+        </article>
+      </section>
+
+      <section class="page" id="page-quarantine">
+        <article class="panel">
+          <div class="panel-heading"><div><p class="eyebrow">ISOLATED FILES</p><h3>Quarantine vault</h3></div></div>
+          <p class="muted">Files are encrypted locally and cannot execute. Restoring a detection can be dangerous.</p>
+          <div class="table-wrap">
+            <table><caption class="sr-only">Files held in the quarantine vault</caption><thead><tr><th>Detection</th><th>Original path</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead><tbody id="quarantine-table"></tbody></table>
+          </div>
+        </article>
+      </section>
+
+      <section class="page" id="page-activity">
+        <article class="panel">
+          <div class="panel-heading"><div><p class="eyebrow">TAMPER-EVIDENT LOG</p><h3>Audit activity</h3></div></div>
+          <div id="audit-list" class="activity-list"></div>
+        </article>
+        <article class="panel history-panel">
+          <div class="panel-heading"><div><p class="eyebrow">SCAN HISTORY</p><h3>Recent scan reports</h3></div></div>
+          <div class="table-wrap">
+            <table>
+              <caption class="sr-only">Recent antivirus scan reports</caption>
+              <thead><tr><th>Scan</th><th>Target</th><th>Completed</th><th>Files</th><th>Detections</th><th>Outcome</th></tr></thead>
+              <tbody id="scan-history"></tbody>
+            </table>
+          </div>
+        </article>
+        <article class="panel background-output-panel">
+          <div class="panel-heading">
+            <div><p class="eyebrow">BACKGROUND OPERATIONS</p><h3>Resident command output</h3></div>
+            <button class="secondary" id="load-background-output">Load output</button>
+          </div>
+          <p class="muted" id="background-output-status">Load the bounded resident-protection log to review background scans, commands, failures, and reconnect activity.</p>
+          <pre class="background-output hidden" id="background-output"></pre>
+        </article>
+        <article class="panel reputation-panel">
+          <div class="panel-heading"><div><p class="eyebrow">LOCAL REPUTATION</p><h3>Threat intelligence explorer</h3></div><span class="status-pill">PRIVATE LOOKUP</span></div>
+          <p class="muted">Check a file hash, IP address, domain, URL, or IP:port value against locally indexed community intelligence. No lookup data leaves this PC.</p>
+          <div class="path-row">
+            <input id="reputation-value" aria-label="Reputation lookup value" placeholder="SHA-256, domain, URL, or IP address">
+            <button class="secondary" id="lookup-reputation">Check reputation</button>
+          </div>
+          <div class="reputation-result empty" id="reputation-result">Enter an indicator to inspect its local reputation.</div>
+        </article>
+      </section>
+
+      <section class="page" id="page-settings">
+        <article class="panel settings-panel">
+          <div class="panel-heading"><div><p class="eyebrow">PROTECTION POLICY</p><h3>Local security controls</h3></div></div>
+          <label class="toggle-row"><span><strong>Realtime file monitoring</strong><small>Watch your user profile for changed files.</small></span><input type="checkbox" id="setting-realtime"><i></i></label>
+          <label class="toggle-row"><span><strong>Monitor all fixed drives</strong><small>Watch new and modified files across every mounted fixed drive.</small></span><input type="checkbox" id="setting-all-drives"><i></i></label>
+          <label class="toggle-row"><span><strong>Deep-scan new downloads</strong><small>Prioritize completed files in Downloads and verify them with local intelligence and ClamAV.</small></span><input type="checkbox" id="setting-downloads-deep"><i></i></label>
+          <label class="toggle-row"><span><strong>TCP connection monitoring</strong><small>Compare active remote endpoints against Feodo Tracker and ThreatFox.</small></span><input type="checkbox" id="setting-network"><i></i></label>
+          <label class="toggle-row"><span><strong>DNS cache monitoring</strong><small>Compare locally resolved domains against the network IOC index.</small></span><input type="checkbox" id="setting-dns"><i></i></label>
+          <label class="toggle-row"><span><strong>Quarantine confirmed threats</strong><small>Automatically isolate exact signature matches.</small></span><input type="checkbox" id="setting-confirmed"><i></i></label>
+          <label class="toggle-row"><span><strong>Quarantine heuristic findings</strong><small>More aggressive; may isolate legitimate scripts.</small></span><input type="checkbox" id="setting-heuristic"><i></i></label>
+          <label class="field-label" for="setting-exclusions">Excluded paths <small>One absolute path per line.</small></label>
+          <textarea id="setting-exclusions" rows="6"></textarea>
+          <button class="primary" id="save-settings">Save settings</button>
+          <p class="terms-note">Connection monitoring observes endpoint metadata and DNS cache entries. It does not inspect packet payloads or TLS contents; that requires a signed Windows Filtering Platform or packet-capture driver.</p>
+        </article>
+        <article class="panel settings-panel device-panel">
+          <div class="panel-heading">
+            <div><p class="eyebrow">DEVICE CONTROL</p><h3>USB removable storage</h3></div>
+            <span class="status-pill" id="usb-storage-state">CHECKING</span>
+          </div>
+          <label class="toggle-row risk-toggle">
+            <span><strong>Block USB and removable storage</strong><small>Deny removable-storage classes while keeping USB keyboards and mice available.</small></span>
+            <input type="checkbox" id="setting-usb-storage-block"><i></i>
+          </label>
+          <p class="terms-note">This uses the Windows “All Removable Storage classes: Deny all access” computer policy. Administrator approval is required. Reconnect storage devices after changing the policy; organization-managed Group Policy can override it.</p>
+        </article>
+        <article class="panel settings-panel hq-panel">
+          <div class="panel-heading">
+            <div><p class="eyebrow">CENTRAL MANAGEMENT</p><h3>SentryLoom HQ</h3></div>
+            <span class="status-pill" id="hq-state">STANDALONE</span>
+          </div>
+          <p class="muted" id="hq-summary">This endpoint is locally managed and does not send telemetry to a server.</p>
+          <div class="hq-actions">
+            <button class="secondary" id="discover-hq">Find HQ on this network</button>
+            <select id="hq-discovered" class="hidden" aria-label="Discovered SentryLoom HQ server"></select>
+          </div>
+          <div class="hq-enrollment" id="hq-enrollment">
+            <label class="field-label" for="hq-url">HQ server URL</label>
+            <input id="hq-url" placeholder="https://security-hq:8443" autocomplete="off">
+            <label class="field-label" for="hq-fingerprint">Certificate SHA-256 fingerprint</label>
+            <input id="hq-fingerprint" placeholder="64 hexadecimal characters" autocomplete="off">
+            <div class="hq-actions">
+              <button class="primary" id="enroll-hq">Request administrator approval</button>
+              <button class="secondary hidden" id="disconnect-hq">Return to standalone mode</button>
+            </div>
+          </div>
+          <p class="terms-note">This device submits an enrollment request without a user credential. An HQ administrator must approve it before telemetry or remote actions begin. Managed mode sends security posture, protection health, scan metrics, update state, performance data, and event types. HQ can request only predefined SentryLoom actions—never arbitrary shell commands. Local protection continues when HQ is unavailable.</p>
+        </article>
+        <article class="panel settings-panel dns-panel">
+          <div class="panel-heading">
+            <div><p class="eyebrow">NETWORK PRIVACY</p><h3>Ad-blocking DNS</h3></div>
+            <span class="status-pill" id="dns-filter-state">CHECKING</span>
+          </div>
+          <p class="muted">Choose a public filtering resolver. SentryLoom configures every currently active routed Windows adapter and enables encrypted DNS-over-HTTPS without plaintext fallback.</p>
+          <div class="dns-profile-grid" id="dns-profile-grid"></div>
+          <div class="dns-adapter-list" id="dns-adapter-list"></div>
+          <div class="dns-actions">
+            <button class="primary" id="apply-dns-profile">Apply selected DNS</button>
+            <button class="secondary" id="restore-dns-profile">Restore previous DNS</button>
+          </div>
+          <p class="terms-note">Windows will request administrator approval. Original per-adapter DNS settings are backed up before the first change and automatically restored if resolution verification fails. VPNs and browsers with their own Secure DNS can override Windows DNS.</p>
+        </article>
+        <article class="panel settings-panel monitoring-panel">
+          <div class="panel-heading"><div><p class="eyebrow">ADVANCED MONITORING</p><h3>Behavior and system telemetry</h3></div></div>
+          <label class="toggle-row"><span><strong>Process and executable monitoring</strong><small>Track process starts, parent relationships, image signatures, and local malware matches.</small></span><input type="checkbox" id="setting-process-monitor"><i></i></label>
+          <label class="toggle-row"><span><strong>Persistence monitoring</strong><small>Baseline Run keys, startup folders, automatic services, scheduled tasks, and WMI consumers.</small></span><input type="checkbox" id="setting-persistence-monitor"><i></i></label>
+          <label class="toggle-row"><span><strong>Ransomware behavior monitoring</strong><small>Watch hidden canaries and detect high-rate filesystem write bursts.</small></span><input type="checkbox" id="setting-ransomware-monitor"><i></i></label>
+          <label class="toggle-row"><span><strong>PowerShell and Windows security events</strong><small>Collect relevant PowerShell, Defender/AMSI-correlated, Code Integrity, Task Scheduler, and Security events.</small></span><input type="checkbox" id="setting-event-monitor"><i></i></label>
+          <label class="toggle-row"><span><strong>Removable-media monitoring</strong><small>Detect newly attached removable volumes and start an automatic local scan.</small></span><input type="checkbox" id="setting-removable-monitor"><i></i></label>
+          <label class="toggle-row"><span><strong>Firewall integrity monitoring</strong><small>Alert on disabled profiles and newly enabled inbound allow rules.</small></span><input type="checkbox" id="setting-firewall-monitor"><i></i></label>
+          <label class="toggle-row risk-toggle"><span><strong>Block high-confidence threat IPs</strong><small>Opt-in: create outbound Windows Defender Firewall rules for IOC matches with confidence of 90 or higher.</small></span><input type="checkbox" id="setting-firewall-block"><i></i></label>
+          <div class="monitoring-summary" id="monitoring-summary">Collector status will appear after protection starts.</div>
+          <button class="secondary" id="clear-firewall-rules">Clear SentryLoom firewall blocks</button>
+          <p class="terms-note">Firewall enforcement uses the Microsoft-signed Windows Defender Firewall service and its WFP engine. SentryLoom does not install an unsigned kernel driver. Restart resident protection after changing collector settings.</p>
+        </article>
+        <article class="panel settings-panel intel-panel">
+          <div class="panel-heading">
+            <div><p class="eyebrow">THREAT INTELLIGENCE</p><h3>Virus databases</h3></div>
+            <button class="primary" id="update-all-feeds">Update all databases</button>
+          </div>
+          <p class="muted">Updates require internet access. Scanning remains completely local after the feeds are indexed.</p>
+          <div class="feed-grid">
+            <div class="feed-card" data-feed="clamav">
+              <div><strong>ClamAV Official</strong><small>Cisco Talos maintained signatures</small></div>
+              <span class="feed-status" id="feed-state-clamav">Never updated</span>
+              <span class="feed-count" id="feed-count-clamav">0 indicators</span>
+              <button class="secondary feed-update" data-update-feed="clamav">Update ClamAV</button>
+            </div>
+            <div class="feed-card" data-feed="malwarebazaar">
+              <div><strong>MalwareBazaar</strong><small>Family-labelled malware hashes</small></div>
+              <span class="feed-status" id="feed-state-malwarebazaar">Auth-Key required</span>
+              <span class="feed-count" id="feed-count-malwarebazaar">0 indicators</span>
+              <button class="secondary feed-update" data-update-feed="malwarebazaar">Update MalwareBazaar</button>
+            </div>
+            <div class="feed-card" data-feed="urlhaus">
+              <div><strong>URLhaus</strong><small>Observed malware-delivery payloads</small></div>
+              <span class="feed-status" id="feed-state-urlhaus">Auth-Key required</span>
+              <span class="feed-count" id="feed-count-urlhaus">0 indicators</span>
+              <button class="secondary feed-update" data-update-feed="urlhaus">Update URLhaus</button>
+            </div>
+            <div class="feed-card" data-feed="feodotracker">
+              <div><strong>Feodo Tracker</strong><small>Recommended botnet C2 IP blocklist</small></div>
+              <span class="feed-status" id="feed-state-feodotracker">Never updated</span>
+              <span class="feed-count" id="feed-count-feodotracker">0 indicators</span>
+              <button class="secondary feed-update" data-update-feed="feodotracker">Update Feodo Tracker</button>
+            </div>
+            <div class="feed-card" data-feed="threatfox">
+              <div><strong>ThreatFox</strong><small>Vetted hashes, URLs, domains, and C2 IOCs</small></div>
+              <span class="feed-status" id="feed-state-threatfox">Auth-Key required</span>
+              <span class="feed-count" id="feed-count-threatfox">0 indicators</span>
+              <button class="secondary feed-update" data-update-feed="threatfox">Update ThreatFox</button>
+            </div>
+          </div>
+          <div class="credential-row">
+            <div>
+              <label for="abuse-auth-key"><strong>abuse.ch Auth-Key</strong></label>
+              <small>Required by MalwareBazaar, URLhaus, and ThreatFox. Stored locally with authenticated encryption.</small>
+            </div>
+            <input id="abuse-auth-key" type="password" autocomplete="off" placeholder="Paste your free Auth-Key">
+            <button class="secondary" id="save-auth-key">Save key</button>
+          </div>
+          <div class="update-progress hidden" id="update-progress">
+            <div class="progress-track"><div id="update-progress-bar"></div></div>
+            <p class="mono" id="update-progress-text">Preparing update…</p>
+          </div>
+          <p class="terms-note">ClamAV signatures are downloaded from clamav.net. MalwareBazaar, URLhaus, ThreatFox, and Feodo Tracker are provided by abuse.ch/Spamhaus under their applicable terms. Network IOCs are indexed locally; automatic blocking remains opt-in.</p>
+        </article>
+      </section>
+    </main>
+  </div>
+  <div id="toast" role="status"></div>
+  <script src="/app.js" type="module"></script>
+</body>
+</html>

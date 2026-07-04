@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/alivirgo/SentryLoom/security/advisories/new
+    about: Report vulnerabilities privately; never open a public security issue.
+  - name: Questions and ideas
+    url: https://github.com/alivirgo/SentryLoom/discussions
+    about: Ask for help or discuss ideas with the community.

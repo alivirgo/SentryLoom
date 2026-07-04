@@ -1,0 +1,67 @@
+.approval-panel {
+  margin-bottom: 14px;
+}
+
+.approvals {
+  display: grid;
+}
+
+.approval {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.5fr) minmax(120px, 1fr) 90px auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 5px;
+  border-bottom: 1px solid #edf0f2;
+}
+
+.approval:last-child {
+  border-bottom: 0;
+}
+
+.approval strong,
+.approval small {
+  display: block;
+}
+
+.approval small {
+  color: #78858e;
+}
+
+.approval-actions {
+  display: flex;
+  gap: 7px;
+}
+
+.approval button {
+  padding: 8px 11px;
+  border: 1px solid #ccd5dc;
+  border-radius: 5px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.approval button.approve {
+  border-color: #78aa99;
+  color: #0f6b5e;
+}
+
+.approval button.reject {
+  color: #a23b3b;
+}
+
+@media (max-width: 850px) {
+  .approval {
+    grid-template-columns: 1fr 100px auto;
+  }
+
+  .approval > :nth-child(2) {
+    display: none;
+  }
+}
+
+@media (max-width: 580px) {
+  .approval {
+    grid-template-columns: 1fr;
+  }
+}

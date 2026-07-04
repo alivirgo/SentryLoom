@@ -1,0 +1,65 @@
+name: Bug report
+description: Report a reproducible SentryLoom defect without sensitive data
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not attach malware, credentials, certificates, private keys,
+        quarantine objects, personal files, or customer telemetry.
+  - type: input
+    id: version
+    attributes:
+      label: SentryLoom version
+      placeholder: 0.16.0
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 24H2
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Endpoint engine
+        - Endpoint dashboard
+        - Native launcher or tray
+        - Installer
+        - SentryLoom HQ
+        - Threat intelligence
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Include expected and actual behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized logs
+      description: Remove paths, hostnames, usernames, addresses, and secrets.
+      render: text
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety check
+      options:
+        - label: I removed secrets, personal data, customer data, and malware.
+          required: true

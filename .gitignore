@@ -1,0 +1,50 @@
+# Dependencies and test output
+node_modules/
+coverage/
+.aegis-data/
+
+# Generated binaries and release artifacts
+build/output/
+dist/
+*.exe
+*.msi
+*.msix
+
+# Runtime state, databases, quarantine, and logs
+data/
+server/data/
+*.sqlite
+*.sqlite-*
+*.db
+*.log
+*.tmp
+*.dmp
+
+# Credentials, certificates, signing material, and local environment
+.env
+.env.*
+!.env.example
+*.enc
+*.key
+*.keys
+*.pem
+*.pfx
+*.p12
+*.cer
+*.crt
+*.der
+*.jks
+*.keystore
+**/master.key
+**/keys/
+signing-key/
+
+# Editor and operating-system files
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+Thumbs.db
+Desktop.ini
+.DS_Store

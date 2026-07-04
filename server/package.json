@@ -1,0 +1,16 @@
+{
+  "name": "sentryloom-hq",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "description": "On-premises management server for SentryLoom Endpoint Security.",
+  "license": "Apache-2.0",
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/main.js",
+    "init": "node --disable-warning=ExperimentalWarning src/init.js",
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "name": "sentryloom-endpoint-security",
+  "version": "0.16.0",
+  "private": true,
+  "type": "module",
+  "description": "Open-source, offline-first Windows endpoint security, antivirus, EDR monitoring, encrypted quarantine, and on-premises fleet management.",
+  "author": "SentryLoom contributors",
+  "bin": {
+    "sentryloom": "./src/cli.js"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/cli.js dashboard",
+    "scan": "node --disable-warning=ExperimentalWarning src/cli.js scan",
+    "test": "node --disable-warning=ExperimentalWarning --test",
+    "check": "node --check src/cli.js && node --disable-warning=ExperimentalWarning --test"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alivirgo/SentryLoom.git"
+  },
+  "bugs": {
+    "url": "https://github.com/alivirgo/SentryLoom/issues"
+  },
+  "homepage": "https://github.com/alivirgo/SentryLoom#readme",
+  "keywords": [
+    "antivirus",
+    "endpoint-security",
+    "edr",
+    "windows",
+    "malware-detection",
+    "ransomware-protection",
+    "threat-intelligence",
+    "on-premises"
+  ]
+}

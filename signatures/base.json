@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "version": "2026.07.03",
+  "description": "Built-in offline safety signatures. Content rules are conservative and reported as suspicious unless explicitly marked confirmed.",
+  "hashes": [
+    {
+      "sha256": "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f",
+      "name": "EICAR-Test-File",
+      "severity": "critical",
+      "confirmed": true,
+      "category": "test"
+    },
+    {
+      "sha256": "7057e364dbf09b6de7a6cc152b8967e50ed86a0edf97cfd2e88b142ac41873f0",
+      "name": "FortiGuard-ML-Test-File",
+      "severity": "critical",
+      "confirmed": true,
+      "category": "test"
+    },
+    {
+      "sha256": "903b0b67d7b23f4c791d563bd5691afa061c47e51e080dff86cfff386ca57098",
+      "name": "FortiGuard-Zero-Hour-Test-File",
+      "severity": "critical",
+      "confirmed": true,
+      "category": "test"
+    }
+  ],
+  "patterns": [
+    {
+      "id": "fortiguard-sandbox-test-marker",
+      "name": "FortiGuard-Sandbox-Test-File",
+      "kind": "literal",
+      "pattern": "Fortinet FortiSandbox Suspicious Test File.",
+      "severity": "critical",
+      "confirmed": true,
+      "category": "test",
+      "extensions": []
+    },
+    {
+      "id": "fortiguard-zero-hour-test-marker",
+      "name": "FortiGuard-Zero-Hour-Test-File",
+      "kind": "literal",
+      "pattern": "ZERO-HOUR-VIRUS-OUTBREAK-TEST-FILE",
+      "severity": "critical",
+      "confirmed": true,
+      "category": "test",
+      "extensions": []
+    },
+    {
+      "id": "powershell-encoded-hidden",
+      "name": "Suspicious-PowerShell-EncodedCommand",
+      "kind": "regex",
+      "pattern": "powershell(?:\\.exe)?[^\\r\\n]{0,180}(?:-enc(?:odedcommand)?\\s+[A-Za-z0-9+/=]{80,}|-w(?:indowstyle)?\\s+hidden)",
+      "flags": "i",
+      "severity": "high",
+      "confirmed": false,
+      "category": "script",
+      "extensions": [".ps1", ".bat", ".cmd", ".vbs", ".js", ".jse", ".wsf", ".hta", ".txt"]
+    },
+    {
+      "id": "lolbin-download-execute",
+      "name": "Suspicious-Download-And-Execute",
+      "kind": "regex",
+      "pattern": "(?:invoke-webrequest|downloadstring|bitsadmin|certutil)[^\\r\\n]{0,220}(?:start-process|iex|invoke-expression|rundll32|regsvr32)",
+      "flags": "i",
+      "severity": "high",
+      "confirmed": false,
+      "category": "script",
+      "extensions": [".ps1", ".bat", ".cmd", ".vbs", ".js", ".jse", ".wsf", ".hta", ".txt"]
+    },
+    {
+      "id": "office-autoopen-shell",
+      "name": "Suspicious-Office-AutoOpen-Shell",
+      "kind": "regex",
+      "pattern": "(?:auto_open|document_open|workbook_open)[\\s\\S]{0,1200}(?:shell|wscript\\.shell|powershell|cmd\\.exe)",
+      "flags": "i",
+      "severity": "high",
+      "confirmed": false,
+      "category": "macro",
+      "extensions": [".vba", ".bas", ".txt"]
+    }
+  ]
+}

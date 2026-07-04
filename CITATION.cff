@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If SentryLoom supports your research or teaching, please cite the project."
+title: "SentryLoom: Local-first Windows endpoint security and on-premises fleet management"
+type: software
+authors:
+  - family-names: "Contributors"
+    given-names: "SentryLoom"
+version: 0.16.0
+date-released: 2026-07-04
+license: Apache-2.0
+repository-code: "https://github.com/alivirgo/SentryLoom"
+url: "https://github.com/alivirgo/SentryLoom"
+keywords:
+  - antivirus
+  - endpoint security
+  - EDR
+  - malware detection
+  - ransomware protection
+  - threat intelligence
+  - Windows
+  - cybersecurity
