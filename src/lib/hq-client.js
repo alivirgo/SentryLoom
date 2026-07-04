@@ -10,6 +10,7 @@ import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { getDeviceIdentity } from "./device-identity.js";
 import {
+  clearHqCredentials,
   clearPendingHqEnrollment,
   saveHqCredentials,
   savePendingHqEnrollment
@@ -359,6 +360,8 @@ export async function enrollWithHq(options) {
     enrolledAt: enrollmentResponse.body.enrolledAt
   };
   await saveHqCredentials(credentials);
+  await clearPendingHqEnrollment();
+  await fs.rm(appPaths().hqConnectorState, { force: true });
   return credentials;
 }
 
@@ -413,6 +416,12 @@ export async function requestHqEnrollment(options = {}) {
     status: "pending"
   };
   await savePendingHqEnrollment(pending);
+  // An explicit, successfully submitted enrollment request changes the
+  // management target. Remove any preserved credentials for a previous HQ so
+  // the resident agent polls this request instead of reconnecting to the old
+  // server after Setup.
+  await clearHqCredentials();
+  await fs.rm(appPaths().hqConnectorState, { force: true });
   return pending;
 }
 
@@ -448,22 +457,32 @@ export async function pollHqEnrollment(pending) {
 
 export async function authorizeHqMaintenance(credentials, password, action, options = {}) {
   if (!credentials) throw new Error("This endpoint is not enrolled with SentryLoom HQ");
-  const response = await hqRequest(
-    credentials.serverUrl,
-    "/api/v1/device/maintenance/authorize",
-    {
-      method: "POST",
-      credentials,
-      fingerprint256: credentials.fingerprint256,
-      allowHttp: options.allowHttp ||
-        process.env.SENTRYLOOM_ALLOW_INSECURE_HQ === "1",
-      body: {
-        password: String(password || ""),
-        action: String(action || "critical-settings")
+  try {
+    const response = await hqRequest(
+      credentials.serverUrl,
+      "/api/v1/device/maintenance/authorize",
+      {
+        method: "POST",
+        credentials,
+        fingerprint256: credentials.fingerprint256,
+        allowHttp: options.allowHttp ||
+          process.env.SENTRYLOOM_ALLOW_INSECURE_HQ === "1",
+        body: {
+          password: String(password || ""),
+          action: String(action || "critical-settings")
+        }
       }
+    );
+    return response.body;
+  } catch (error) {
+    if (/device api route not found|not found/i.test(error.message)) {
+      throw new Error(
+        `The HQ at ${credentials.serverUrl} does not expose the maintenance authorization API. ` +
+        "Confirm this is the intended server, then install the latest compatible client and HQ builds and reconnect."
+      );
     }
-  );
-  return response.body;
+    throw error;
+  }
 }
 
 export async function requestHqMaintenancePassword(credentials, options = {}) {
@@ -476,21 +495,32 @@ export async function requestHqMaintenancePassword(credentials, options = {}) {
     publicKeyEncoding: { type: "spki", format: "pem" },
     privateKeyEncoding: { type: "pkcs8", format: "pem" }
   });
-  const created = await hqRequest(
-    credentials.serverUrl,
-    "/api/v1/device/maintenance-requests",
-    {
-      method: "POST",
-      credentials,
-      fingerprint256: credentials.fingerprint256,
-      allowHttp,
-      body: {
-        action: String(options.action || "critical-settings"),
-        reason: String(options.reason || "").slice(0, 500),
-        publicKey: keys.publicKey
+  let created;
+  try {
+    created = await hqRequest(
+      credentials.serverUrl,
+      "/api/v1/device/maintenance-requests",
+      {
+        method: "POST",
+        credentials,
+        fingerprint256: credentials.fingerprint256,
+        allowHttp,
+        body: {
+          action: String(options.action || "critical-settings"),
+          reason: String(options.reason || "").slice(0, 500),
+          publicKey: keys.publicKey
+        }
       }
+    );
+  } catch (error) {
+    if (/device api route not found|not found/i.test(error.message)) {
+      throw new Error(
+        `The HQ at ${credentials.serverUrl} does not expose maintenance requests. ` +
+        "Confirm this is the intended server, then install the latest compatible client and HQ builds."
+      );
     }
-  );
+    throw error;
+  }
   const deadline = Math.min(
     Date.now() + 20000,
     new Date(created.body.expiresAt).getTime()
@@ -665,6 +695,9 @@ export class HqConnector {
     this.nextRetryAt = null;
     this.offlineNotified = false;
     this.activeCommands = new Set();
+    this.hqVersion = null;
+    this.hqCapabilities = [];
+    this.maintenanceAuthorizationSupported = null;
   }
 
   start() {
@@ -729,10 +762,19 @@ export class HqConnector {
     this.lastAttemptAt = new Date(now).toISOString();
     try {
       if (now - this.lastTelemetryAt >= this.telemetryIntervalMs) {
-        await this.request("/api/v1/device/telemetry", {
+        const telemetryResponse = await this.request("/api/v1/device/telemetry", {
           method: "POST",
           body: await this.metricsProvider()
         });
+        this.hqVersion = telemetryResponse.hq?.version || null;
+        if (Array.isArray(telemetryResponse.hq?.capabilities)) {
+          this.hqCapabilities = telemetryResponse.hq.capabilities.map(String);
+          this.maintenanceAuthorizationSupported =
+            this.hqCapabilities.includes("maintenance-authorization-v1");
+        } else {
+          this.hqCapabilities = [];
+          this.maintenanceAuthorizationSupported = null;
+        }
         this.lastTelemetryAt = Date.now();
       }
       const response = await this.request("/api/v1/device/commands");
@@ -855,7 +897,10 @@ export class HqConnector {
       lastResumeAt: this.lastResumeAt,
       lastError: this.lastError,
       nextRetryAt: this.nextRetryAt,
-      activeCommands: this.activeCommands.size
+      activeCommands: this.activeCommands.size,
+      hqVersion: this.hqVersion,
+      hqCapabilities: this.hqCapabilities,
+      maintenanceAuthorizationSupported: this.maintenanceAuthorizationSupported
     };
   }
 }

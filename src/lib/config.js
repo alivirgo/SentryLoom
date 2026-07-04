@@ -1,4 +1,6 @@
-import { DEFAULT_CONFIG, appPaths } from "../constants.js";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { APP_VERSION, DEFAULT_CONFIG, appPaths } from "../constants.js";
 import { ensureDirectory, readJson, writeJsonAtomic } from "./fs-safe.js";
 import { getDnsProfile } from "./dns-profiles.js";
 
@@ -102,8 +104,50 @@ export async function loadConfig() {
   const paths = appPaths();
   await ensureDirectory(paths.data);
   const stored = await readJson(paths.config, {});
+  const storedSchema = Number(stored.schemaVersion) || 1;
+  if (storedSchema > DEFAULT_CONFIG.schemaVersion) {
+    throw new Error(
+      `Configuration schema ${storedSchema} is newer than supported schema ${DEFAULT_CONFIG.schemaVersion}`
+    );
+  }
   const config = validateConfig(deepMerge(structuredClone(DEFAULT_CONFIG), stored));
-  if (!Object.keys(stored).length) await writeJsonAtomic(paths.config, config);
+  config.schemaVersion = DEFAULT_CONFIG.schemaVersion;
+  const upgradeState = await readJson(paths.upgradeState, {});
+  const versionChanged = upgradeState.currentVersion !== APP_VERSION;
+  const configChanged = JSON.stringify(stored) !== JSON.stringify(config);
+  if (Object.keys(stored).length && versionChanged) {
+    await ensureDirectory(paths.upgradeBackups);
+    const label = new Date().toISOString().replace(/[:.]/g, "-");
+    const backup = path.join(
+      paths.upgradeBackups,
+      `config-${upgradeState.currentVersion || `schema-${storedSchema}`}-${label}.json`
+    );
+    await fs.copyFile(paths.config, backup);
+  }
+  if (!Object.keys(stored).length || configChanged) {
+    await writeJsonAtomic(paths.config, config);
+  }
+  if (versionChanged) {
+    await writeJsonAtomic(paths.upgradeState, {
+      schemaVersion: 1,
+      previousVersion: upgradeState.currentVersion || null,
+      currentVersion: APP_VERSION,
+      configSchemaVersion: config.schemaVersion,
+      migratedAt: new Date().toISOString(),
+      preservationPolicy: "retain-unless-versioned-migration",
+      preservedCategories: [
+        "settings",
+        "enrollment-and-credentials",
+        "quarantine",
+        "audit-and-runtime-logs",
+        "scan-history",
+        "device-identity",
+        "threat-intelligence",
+        "dns-usb-and-firewall-state",
+        "update-state"
+      ]
+    });
+  }
   return config;
 }
 

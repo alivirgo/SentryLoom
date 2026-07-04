@@ -417,6 +417,22 @@ export async function downloadClamDatabases(config, onProgress, fetchImpl) {
     "LogTime yes",
     ""
   ].join("\n"), { encoding: "utf8", mode: 0o600 });
+  const commandEnvironment = { ...process.env };
+  if (process.platform === "win32") {
+    const caBundle = path.join(path.dirname(directory), "windows-trusted-roots.pem");
+    onProgress({
+      source: "clamav",
+      phase: "download",
+      message: "Exporting Windows trusted roots for FreshClam HTTPS verification"
+    });
+    const rootCount = await exportWindowsTrustedRoots(caBundle);
+    commandEnvironment.CURL_CA_BUNDLE = caBundle;
+    onProgress({
+      source: "clamav",
+      phase: "download",
+      message: `FreshClam will verify HTTPS with ${rootCount} Windows trusted root certificates`
+    });
+  }
   onProgress({ source: "clamav", phase: "download", message: "Running the official freshclam updater" });
   const output = await runClamCommand(executable, [
     `--config-file=${configFile}`,
@@ -427,7 +443,7 @@ export async function downloadClamDatabases(config, onProgress, fetchImpl) {
     "--update-db=daily"
   ], Math.max(config.requestTimeoutMs, 10 * 60 * 1000), (line) => {
     onProgress({ source: "clamav", phase: "download", message: line.slice(0, 220) });
-  });
+  }, { env: commandEnvironment });
   const artifacts = [];
   for (const database of ["main", "daily"]) {
     const destination = path.join(directory, `${database}.cvd`);
@@ -444,6 +460,58 @@ export async function downloadClamDatabases(config, onProgress, fetchImpl) {
     });
   }
   return artifacts;
+}
+
+export async function exportWindowsTrustedRoots(destination) {
+  if (process.platform !== "win32") return 0;
+  await ensureDirectory(path.dirname(destination));
+  const powershell = path.join(
+    process.env.WINDIR || "C:\\Windows",
+    "System32",
+    "WindowsPowerShell",
+    "v1.0",
+    "powershell.exe"
+  );
+  const script = [
+    "$ErrorActionPreference = 'Stop'",
+    "$unique = @{}",
+    "foreach ($location in @('LocalMachine', 'CurrentUser')) {",
+    "  $store = New-Object Security.Cryptography.X509Certificates.X509Store('Root', $location)",
+    "  try {",
+    "    $store.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadOnly)",
+    "    foreach ($cert in $store.Certificates) { $unique[$cert.Thumbprint] = $cert }",
+    "  } finally { $store.Close() }",
+    "}",
+    "$certs = @($unique.Values)",
+    "$builder = New-Object Text.StringBuilder",
+    "foreach ($cert in $certs) {",
+    "  [void]$builder.AppendLine('-----BEGIN CERTIFICATE-----')",
+    "  [void]$builder.AppendLine([Convert]::ToBase64String($cert.RawData, [Base64FormattingOptions]::InsertLineBreaks))",
+    "  [void]$builder.AppendLine('-----END CERTIFICATE-----')",
+    "}",
+    "[IO.File]::WriteAllText($env:SENTRYLOOM_CA_BUNDLE_PATH, $builder.ToString(), (New-Object Text.UTF8Encoding($false)))",
+    "[Console]::Out.Write($certs.Count)"
+  ].join("; ");
+  const result = await runProcess(powershell, [
+    "-NoLogo",
+    "-NoProfile",
+    "-NonInteractive",
+    "-WindowStyle",
+    "Hidden",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-Command",
+    script
+  ], 30000, {
+    ...process.env,
+    SENTRYLOOM_CA_BUNDLE_PATH: destination
+  });
+  const count = Number(result.trim());
+  if (!Number.isInteger(count) || count < 1) {
+    throw new Error("Windows did not provide any trusted root certificates for FreshClam");
+  }
+  await fsp.chmod(destination, 0o600).catch(() => {});
+  return count;
 }
 
 export async function findClamExecutable(tool) {
@@ -463,9 +531,39 @@ export async function findClamExecutable(tool) {
   return null;
 }
 
-async function runClamCommand(executable, args, timeoutMs, onLine) {
+function runProcess(executable, args, timeoutMs, environment) {
   return new Promise((resolve, reject) => {
-    const child = spawn(executable, args, { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(executable, args, {
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: environment
+    });
+    let output = "";
+    const timer = setTimeout(() => {
+      child.kill();
+      reject(new Error(`Process timed out: ${path.basename(executable)}`));
+    }, timeoutMs);
+    child.stdout.on("data", (chunk) => { output = `${output}${chunk}`.slice(-1024 * 1024); });
+    child.stderr.on("data", (chunk) => { output = `${output}${chunk}`.slice(-1024 * 1024); });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.on("exit", (code) => {
+      clearTimeout(timer);
+      if (code === 0) resolve(output);
+      else reject(new Error(`${path.basename(executable)} failed with exit code ${code}: ${output.slice(-2000)}`));
+    });
+  });
+}
+
+async function runClamCommand(executable, args, timeoutMs, onLine, options = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(executable, args, {
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: options.env || process.env
+    });
     let output = "";
     let pending = "";
     let lastLine = "";
@@ -500,7 +598,15 @@ async function runClamCommand(executable, args, timeoutMs, onLine) {
       clearTimeout(timer);
       if (pending) emitLine(pending);
       if (code === 0) resolve(output);
-      else reject(new Error(`freshclam failed with exit code ${code}: ${output.slice(-1000)}`));
+      else if (/(?:error 60|download failed \\(60\\)|ssl peer certificate)/i.test(output)) {
+        reject(new Error(
+          "FreshClam could not validate the ClamAV HTTPS certificate. " +
+          "SentryLoom exported the Windows trusted roots, so verify the Windows date/time, " +
+          "corporate TLS inspection certificate, and trusted-root policy before retrying."
+        ));
+      } else {
+        reject(new Error(`freshclam failed with exit code ${code}: ${output.slice(-1000)}`));
+      }
     });
   });
 }

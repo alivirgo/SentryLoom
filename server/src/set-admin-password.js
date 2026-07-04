@@ -13,6 +13,7 @@ const config = JSON.parse(await fs.readFile(configPath, "utf8"));
 const salt = crypto.randomBytes(16).toString("base64");
 const iterations = 310000;
 config.admin = {
+  ...(config.admin || {}),
   iterations,
   salt,
   passwordHash: hashAdminPassword(password, salt, iterations)

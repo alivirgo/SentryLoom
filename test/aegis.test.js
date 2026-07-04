@@ -53,7 +53,10 @@ const {
   probeHq,
   requestHqEnrollment
 } = await import("../src/lib/hq-client.js");
-const { loadHqCredentials } = await import("../src/lib/hq-credential-store.js");
+const {
+  loadHqCredentials,
+  saveHqCredentials
+} = await import("../src/lib/hq-credential-store.js");
 
 test("HQ discovery targets every active IPv4 subnet and ignores internal adapters", () => {
   assert.deepEqual(hqDiscoveryBroadcastAddresses({
@@ -143,6 +146,34 @@ test.afterEach(async () => {
     }
     await fs.rm(root, { recursive: true, force: true });
   }
+});
+
+test("client upgrades preserve stored settings and record a versioned migration", async () => {
+  await sandbox("config-upgrade");
+  const data = process.env.SENTRYLOOM_DATA_DIR;
+  await fs.mkdir(data, { recursive: true });
+  await fs.writeFile(path.join(data, "config.json"), JSON.stringify({
+    schemaVersion: 1,
+    protection: {
+      realtimeEnabled: false
+    },
+    scanner: {
+      exclusions: ["C:\\Preserve-Me"]
+    }
+  }));
+  await fs.writeFile(path.join(data, "upgrade-state.json"), JSON.stringify({
+    currentVersion: "0.16.1"
+  }));
+  const config = await loadConfig();
+  assert.equal(config.schemaVersion, 2);
+  assert.equal(config.protection.realtimeEnabled, false);
+  assert.equal(config.protection.downloadsDeepScanEnabled, true);
+  assert.deepEqual(config.scanner.exclusions, ["C:\\Preserve-Me"]);
+  const migration = JSON.parse(await fs.readFile(path.join(data, "upgrade-state.json"), "utf8"));
+  assert.equal(migration.previousVersion, "0.16.1");
+  assert.equal(migration.currentVersion, "0.16.3");
+  const backups = await fs.readdir(path.join(data, "upgrade-backups"));
+  assert.equal(backups.some((name) => name.startsWith("config-0.16.1-")), true);
 });
 
 test("exact EICAR signature is confirmed and clean files remain clean", async () => {
@@ -364,7 +395,7 @@ test("Downloads deep protection stabilizes files and uses the full scan pipeline
   assert.equal(protection.status().downloadsDeepScan.detections, 1);
 });
 
-test("managed client encrypts enrollment, sends telemetry, and executes allowlisted HQ commands", async () => {
+test("managed client replaces a preserved HQ target, encrypts enrollment, and executes allowlisted commands", async () => {
   const root = await sandbox("hq-client");
   process.env.SENTRYLOOM_ALLOW_INSECURE_HQ = "1";
   const store = await new HqStore(path.join(root, "hq.sqlite")).open();
@@ -384,12 +415,37 @@ test("managed client encrypts enrollment, sends telemetry, and executes allowlis
   }, { store, httpOnly: true });
   const address = await hq.listen("127.0.0.1", 0);
   try {
+    await saveHqCredentials({
+      serverUrl: "http://192.168.1.9:8443",
+      fingerprint256: "",
+      hqName: "Previous HQ",
+      deviceId: crypto.randomUUID(),
+      token: crypto.randomBytes(32).toString("base64url"),
+      enrolledAt: new Date().toISOString()
+    });
+    const oldConnectorState = path.join(
+      process.env.SENTRYLOOM_DATA_DIR,
+      "hq-connector-state.json"
+    );
+    await fs.mkdir(path.dirname(oldConnectorState), { recursive: true });
+    await fs.writeFile(oldConnectorState, JSON.stringify({
+      serverUrl: "http://192.168.1.9:8443",
+      updatedAt: new Date().toISOString()
+    }));
+    assert.equal((await loadHqCredentials()).serverUrl, "http://192.168.1.9:8443");
     const identity = await probeHq(`http://127.0.0.1:${address.port}`, { allowHttp: true });
     assert.equal(identity.hqName, "Test HQ");
     const pending = await requestHqEnrollment({
       serverUrl: `http://127.0.0.1:${address.port}`,
       allowHttp: true
     });
+    assert.equal(
+      await loadHqCredentials(),
+      null,
+      "the newly requested HQ must replace preserved credentials for a previous server"
+    );
+    assert.equal(pending.serverUrl, `http://127.0.0.1:${address.port}`);
+    await assert.rejects(fs.stat(oldConnectorState), { code: "ENOENT" });
     const request = store.listEnrollmentRequests().find((item) => item.id === pending.requestId);
     assert.equal(request.status, "pending");
     store.reviewEnrollmentRequest(pending.requestId, true);
@@ -417,6 +473,8 @@ test("managed client encrypts enrollment, sends telemetry, and executes allowlis
     });
     connector.running = true;
     await connector.pulse();
+    assert.equal(connector.status().hqVersion, "0.4.2");
+    assert.equal(connector.status().maintenanceAuthorizationSupported, true);
     for (let attempt = 0; attempt < 20 &&
          store.listCommands(credentials.deviceId)[0].status !== "completed"; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 25));
@@ -574,6 +632,14 @@ test("dashboard requires a launch session and CSRF for writes", async () => {
     })
   );
   const engine = await new AntivirusEngine().initialize();
+  await fs.writeFile(
+    path.join(root, "data", "background-runtime.json"),
+    JSON.stringify({
+      launcherPid: 100,
+      workerPid: 101,
+      updatedAt: new Date().toISOString()
+    })
+  );
   const dashboard = createDashboardServer(engine);
   const address = await dashboard.listen("127.0.0.1", 0);
   const origin = `http://127.0.0.1:${address.port}`;

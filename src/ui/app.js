@@ -7,12 +7,35 @@ let quarantineRequest = null;
 let discoveredHqServers = [];
 let dashboardReachable = true;
 let hqEnrolled = false;
+let hqMaintenanceCompatibility = "standalone";
 
 const savedTheme = localStorage.getItem("sentryloom-theme");
 document.documentElement.dataset.theme = savedTheme === "light" ? "light" : "dark";
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
+const maintenanceProtectedControlIds = [
+  "setting-realtime",
+  "setting-all-drives",
+  "setting-downloads-deep",
+  "setting-network",
+  "setting-dns",
+  "setting-confirmed",
+  "setting-heuristic",
+  "setting-exclusions",
+  "setting-usb-storage-block",
+  "setting-process-monitor",
+  "setting-persistence-monitor",
+  "setting-ransomware-monitor",
+  "setting-event-monitor",
+  "setting-removable-monitor",
+  "setting-firewall-monitor",
+  "setting-firewall-block",
+  "apply-dns-profile",
+  "restore-dns-profile",
+  "clear-firewall-rules",
+  "disconnect-hq"
+];
 
 function syncThemeButton() {
   const light = document.documentElement.dataset.theme === "light";
@@ -197,7 +220,117 @@ function renderHq(status) {
     ? "Request approval again"
     : rejected ? "Submit a new approval request" : "Request administrator approval";
   $("#hq-maintenance").classList.toggle("hidden", !enrolled);
+  const supported = status.maintenanceAuthorizationSupported;
+  hqMaintenanceCompatibility = !enrolled
+    ? pending || rejected ? "pending" : "standalone"
+    : supported === true
+      ? connected ? "ready" : "offline"
+      : supported === false ? "upgrade-required" : "checking";
+  renderSettingAuthorization(status);
   if (status.serverUrl && !$("#hq-url").value) $("#hq-url").value = status.serverUrl;
+}
+
+function renderSettingAuthorization(status) {
+  const summary = $("#settings-access-summary");
+  const messages = {
+    standalone: {
+      title: "Standalone settings are locally authorized",
+      detail: "Protected controls work without an HQ maintenance password.",
+      badge: "Works now · no password required",
+      badgeClass: "open",
+      summaryClass: "ready"
+    },
+    pending: {
+      title: "Settings will be protected after HQ approval",
+      detail: "Complete enrollment first; local protection continues meanwhile.",
+      badge: "Available after HQ enrollment",
+      badgeClass: "blocked",
+      summaryClass: "warning"
+    },
+    ready: {
+      title: "HQ maintenance authorization is active",
+      detail: "Enter a current one-time password before changing a protected control.",
+      badge: "HQ maintenance password required",
+      badgeClass: "",
+      summaryClass: "ready"
+    },
+    offline: {
+      title: "HQ is offline",
+      detail: "Protected changes need both a maintenance password and a reachable HQ server.",
+      badge: "Password + reachable HQ required",
+      badgeClass: "blocked",
+      summaryClass: "warning"
+    },
+    checking: {
+      title: "HQ did not advertise capability metadata",
+      detail: "Protected changes remain available with a maintenance password; SentryLoom will verify support when the action is submitted.",
+      badge: "HQ password required · support verified on use",
+      badgeClass: "",
+      summaryClass: "warning"
+    },
+    "upgrade-required": {
+      title: "HQ upgrade required for protected settings",
+      detail: `Connected HQ ${status.hqVersion || "version not reported"} explicitly reports that maintenance authorization is unavailable. Install matching current client and HQ versions.`,
+      badge: "Unavailable · install matching current versions",
+      badgeClass: "blocked",
+      summaryClass: "error"
+    }
+  };
+  const message = messages[hqMaintenanceCompatibility];
+  summary.className = `settings-access-summary ${message.summaryClass}`;
+  summary.innerHTML = `<strong>${escapeHtml(message.title)}</strong><span>${escapeHtml(message.detail)}</span>`;
+  for (const id of maintenanceProtectedControlIds) {
+    const control = $(`#${id}`);
+    if (!control) continue;
+    let badge = document.querySelector(`[data-maintenance-for="${id}"]`);
+    if (!badge) {
+      badge = document.createElement("small");
+      badge.dataset.maintenanceFor = id;
+      const toggleCopy = control.closest(".toggle-row")?.querySelector(":scope > span");
+      const fieldLabel = document.querySelector(`label[for="${id}"]`);
+      if (toggleCopy) toggleCopy.appendChild(badge);
+      else if (fieldLabel) fieldLabel.appendChild(badge);
+      else {
+        badge.classList.add("setting-auth-button-note");
+        control.insertAdjacentElement("afterend", badge);
+      }
+    }
+    const buttonNote = badge.classList.contains("setting-auth-button-note");
+    badge.className = `setting-auth-badge ${message.badgeClass}${buttonNote ? " setting-auth-button-note" : ""}`;
+    badge.textContent = message.badge;
+    control.title = message.detail;
+  }
+  const maintenanceControlsEnabled = hqMaintenanceCompatibility === "ready" ||
+    hqMaintenanceCompatibility === "offline" ||
+    hqMaintenanceCompatibility === "checking";
+  $("#maintenance-password").disabled = !maintenanceControlsEnabled;
+  $("#request-maintenance-password").disabled = !["ready", "checking"].includes(hqMaintenanceCompatibility);
+  if (hqMaintenanceCompatibility === "upgrade-required") {
+    $("#maintenance-request-state").textContent =
+      "Install matching current client and HQ versions before requesting or using maintenance passwords.";
+  }
+}
+
+function protectedSettingPreflight() {
+  if (!hqEnrolled) return true;
+  if (hqMaintenanceCompatibility === "upgrade-required") {
+    toast("Install matching current client and HQ versions before changing protected settings.", true);
+    return false;
+  }
+  if (hqMaintenanceCompatibility === "pending") {
+    toast("Complete HQ enrollment before changing protected settings.", true);
+    return false;
+  }
+  if (hqMaintenanceCompatibility === "offline") {
+    toast("HQ is offline. Protected settings require a reachable server.", true);
+    return false;
+  }
+  if (!maintenancePassword()) {
+    toast("Enter a current HQ maintenance password before changing this protected setting.", true);
+    $("#maintenance-password").focus();
+    return false;
+  }
+  return true;
 }
 
 function maintenancePassword() {
@@ -543,6 +676,7 @@ $("#exit-app").addEventListener("click", async () => {
   }
 });
 $("#save-settings").addEventListener("click", async () => {
+  if (!protectedSettingPreflight()) return;
   const body = {
     maintenancePassword: maintenancePassword(),
     protection: {
@@ -574,6 +708,10 @@ $("#save-settings").addEventListener("click", async () => {
   } catch (error) { toast(error.message, true); }
 });
 $("#request-maintenance-password").addEventListener("click", async () => {
+  if (!["ready", "checking"].includes(hqMaintenanceCompatibility)) {
+    toast("A compatible, connected HQ server is required for a 20-second request.", true);
+    return;
+  }
   const button = $("#request-maintenance-password");
   const state = $("#maintenance-request-state");
   button.disabled = true;
@@ -666,6 +804,7 @@ $("#enroll-hq").addEventListener("click", async () => {
   }
 });
 $("#disconnect-hq").addEventListener("click", async () => {
+  if (!protectedSettingPreflight()) return;
   if (!confirm("Return this endpoint to standalone mode? HQ will stop receiving telemetry and issuing actions, but local protection will continue.")) return;
   try {
     const status = await api("/api/hq/disconnect", {
@@ -680,6 +819,7 @@ $("#disconnect-hq").addEventListener("click", async () => {
   } catch (error) { toast(error.message, true); }
 });
 $("#clear-firewall-rules").addEventListener("click", async () => {
+  if (!protectedSettingPreflight()) return;
   if (!confirm("Remove every outbound threat-IP rule created by SentryLoom?")) return;
   try {
     const status = await api("/api/firewall-policy/clear", {
@@ -695,6 +835,10 @@ $("#clear-firewall-rules").addEventListener("click", async () => {
 $("#setting-usb-storage-block").addEventListener("change", async () => {
   const control = $("#setting-usb-storage-block");
   const requested = control.checked;
+  if (!protectedSettingPreflight()) {
+    control.checked = !requested;
+    return;
+  }
   const message = requested
     ? "Block access to USB and other removable storage classes on this PC? USB keyboards and mice will remain available."
     : "Restore the removable-storage policy that existed before SentryLoom enabled blocking?";
@@ -721,6 +865,7 @@ $("#setting-usb-storage-block").addEventListener("change", async () => {
   }
 });
 $("#apply-dns-profile").addEventListener("click", async () => {
+  if (!protectedSettingPreflight()) return;
   const selected = document.querySelector('input[name="dns-profile"]:checked')?.value;
   if (!selected) return toast("Choose a DNS filtering profile", true);
   if (!confirm("Apply this encrypted DNS profile to every active Windows network adapter?")) return;
@@ -747,6 +892,7 @@ $("#apply-dns-profile").addEventListener("click", async () => {
   }
 });
 $("#restore-dns-profile").addEventListener("click", async () => {
+  if (!protectedSettingPreflight()) return;
   if (!confirm("Restore the DNS settings saved before SentryLoom made its first change?")) return;
   const button = $("#restore-dns-profile");
   button.disabled = true;

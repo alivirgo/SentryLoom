@@ -1,5 +1,5 @@
 #define MyAppName "SentryLoom HQ"
-#define MyAppVersion "0.4.1"
+#define MyAppVersion "0.4.2"
 #define MyAppPublisher "NUC7 Studios"
 
 [Setup]
@@ -209,7 +209,8 @@ begin
     ExpandConstant('{app}\Install-SentryLoomHq.ps1') + '" -HqName "' +
     Trim(HqPage.Values[0]) + '" -PublicHost "' + Trim(HqPage.Values[1]) +
     '" -Port ' + Trim(HqPage.Values[2]) + ' -ResultPath "' + ResultFile +
-    '" -AdminPasswordFile "' + PasswordFile + '" -InstallLogPath "' + InstallLog + '"';
+    '" -AdminPasswordFile "' + PasswordFile + '" -InstallLogPath "' + InstallLog +
+    '" -TargetVersion "{#MyAppVersion}"';
   InstallDetail('Creating or preserving the HQ database and TLS identity.');
   InstallDetail('Hashing and verifying the administrator password selected in Setup.');
   InstallDetail('Registering the self-restarting background service.');

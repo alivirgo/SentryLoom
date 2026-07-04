@@ -2,7 +2,7 @@ import os from "node:os";
 import path from "node:path";
 
 export const APP_NAME = "SentryLoom Endpoint Security";
-export const APP_VERSION = "0.16.1";
+export const APP_VERSION = "0.16.3";
 
 export function dataDirectory() {
   if (process.env.SENTRYLOOM_DATA_DIR) return path.resolve(process.env.SENTRYLOOM_DATA_DIR);
@@ -41,12 +41,14 @@ export function appPaths() {
     dashboardRuntime: path.join(data, "dashboard-runtime.txt"),
     backgroundRuntime: path.join(data, "background-runtime.json"),
     backgroundOutput: path.join(data, "logs", "background-output.log"),
-    backgroundOutputPrevious: path.join(data, "logs", "background-output.previous.log")
+    backgroundOutputPrevious: path.join(data, "logs", "background-output.previous.log"),
+    upgradeState: path.join(data, "upgrade-state.json"),
+    upgradeBackups: path.join(data, "upgrade-backups")
   };
 }
 
 export const DEFAULT_CONFIG = Object.freeze({
-  schemaVersion: 1,
+  schemaVersion: 2,
   protection: {
     realtimeEnabled: true,
     monitorAllFixedDrives: true,

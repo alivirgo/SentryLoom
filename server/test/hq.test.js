@@ -7,7 +7,12 @@ import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { HqStore, hashAdminPassword, verifyAdminPassword } from "../src/store.js";
-import { buildAdminAlerts, createHqServer } from "../src/server.js";
+import {
+  applyHqSettings,
+  buildAdminAlerts,
+  createHqServer,
+  publicHqSettings
+} from "../src/server.js";
 import {
   authorizeHqMaintenance,
   downloadHqPackage,
@@ -25,7 +30,9 @@ test("HQ setup password updater hashes the chosen password without printing it",
     admin: {
       iterations: 1000,
       salt: Buffer.alloc(16).toString("base64"),
-      passwordHash: Buffer.alloc(32).toString("base64")
+      passwordHash: Buffer.alloc(32).toString("base64"),
+      sessionHours: 8,
+      maxLoginAttempts: 5
     }
   }));
   try {
@@ -46,6 +53,8 @@ test("HQ setup password updater hashes the chosen password without printing it",
     const config = JSON.parse(await fs.readFile(configPath, "utf8"));
     assert.equal(verifyAdminPassword(password, config.admin), true);
     assert.equal(verifyAdminPassword("wrong-password", config.admin), false);
+    assert.equal(config.admin.sessionHours, 8);
+    assert.equal(config.admin.maxLoginAttempts, 5);
     const verification = spawnSync(process.execPath, [
       "--disable-warning=ExperimentalWarning",
       path.join(projectRoot, "server", "src", "verify-admin-password.js"),
@@ -96,6 +105,47 @@ test("HQ alerts cover stale clients, detections, failures, and failed commands",
   assert.equal(alerts.some((alert) => alert.kind === "command"), true);
 });
 
+test("HQ settings expose only discrete safe values and preserve secret admin fields", () => {
+  const config = {
+    schemaVersion: 1,
+    telemetryRetentionDays: 30,
+    admin: {
+      salt: "secret-salt",
+      passwordHash: "secret-hash"
+    },
+    updates: { autoDeploy: false }
+  };
+  applyHqSettings(config, {
+    telemetryRetentionDays: 365,
+    offlineAfterSeconds: 300,
+    sessionHours: 8,
+    maxLoginAttempts: 5,
+    maintenanceMinutes: 30,
+    maintenanceUses: 3,
+    autoDeploy: true
+  });
+  assert.equal(config.admin.passwordHash, "secret-hash");
+  assert.equal(config.admin.salt, "secret-salt");
+  assert.deepEqual(publicHqSettings(config), {
+    schemaVersion: 2,
+    telemetryRetentionDays: 365,
+    offlineAfterSeconds: 300,
+    sessionHours: 8,
+    maxLoginAttempts: 5,
+    maintenanceMinutes: 30,
+    maintenanceUses: 3,
+    autoDeploy: true,
+    allowed: {
+      retentionDays: [30, 90, 365],
+      offlineAfterSeconds: [60, 300, 900],
+      sessionHours: [1, 4, 8, 12, 24],
+      maxLoginAttempts: [5, 10, 20],
+      maintenanceMinutes: [5, 10, 30, 60],
+      maintenanceUses: [1, 3, 10]
+    }
+  });
+});
+
 test("HQ enrolls, authenticates telemetry, and delivers allowlisted commands", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "sentryloom-hq-"));
   const salt = crypto.randomBytes(16).toString("base64");
@@ -134,8 +184,10 @@ test("HQ enrolls, authenticates telemetry, and delivers allowlisted commands", a
     releaseNotes: "Test update"
   }));
   const store = await new HqStore(config.databasePath).open();
+  const hqConfigPath = path.join(root, "config.json");
+  await fs.writeFile(hqConfigPath, `${JSON.stringify(config, null, 2)}\n`);
   store.createEnrollmentCode("ENROLL-ONCE", { hours: 1, uses: 1 });
-  const hq = await createHqServer(config, { store, httpOnly: true });
+  const hq = await createHqServer(config, { store, httpOnly: true, configPath: hqConfigPath });
   const address = await hq.listen("127.0.0.1", 0);
   const origin = `http://127.0.0.1:${address.port}`;
   try {
@@ -181,6 +233,12 @@ test("HQ enrolls, authenticates telemetry, and delivers allowlisted commands", a
       })
     });
     assert.equal(telemetryResponse.status, 202);
+    const telemetryAcknowledgement = await telemetryResponse.json();
+    assert.equal(telemetryAcknowledgement.hq.version, "0.4.2");
+    assert.equal(
+      telemetryAcknowledgement.hq.capabilities.includes("maintenance-authorization-v1"),
+      true
+    );
     const updateMetadataResponse = await fetch(`${origin}/api/v1/device/update`, {
       headers: deviceHeaders
     });
@@ -220,6 +278,32 @@ test("HQ enrolls, authenticates telemetry, and delivers allowlisted commands", a
       "Content-Type": "application/json",
       "X-SentryLoom-CSRF": login.csrf
     };
+
+    const settingsResponse = await fetch(`${origin}/api/admin/settings`, {
+      headers: adminHeaders
+    });
+    assert.equal(settingsResponse.status, 200);
+    assert.equal((await settingsResponse.json()).telemetryRetentionDays, 30);
+    const updatedSettingsResponse = await fetch(`${origin}/api/admin/settings`, {
+      method: "PATCH",
+      headers: adminHeaders,
+      body: JSON.stringify({
+        telemetryRetentionDays: 90,
+        offlineAfterSeconds: 300,
+        sessionHours: 8,
+        maxLoginAttempts: 5,
+        maintenanceMinutes: 30,
+        maintenanceUses: 3,
+        autoDeploy: true
+      })
+    });
+    assert.equal(updatedSettingsResponse.status, 200);
+    const updatedSettings = await updatedSettingsResponse.json();
+    assert.equal(updatedSettings.settings.telemetryRetentionDays, 90);
+    assert.equal(updatedSettings.settings.autoDeploy, true);
+    const persistedSettings = JSON.parse(await fs.readFile(hqConfigPath, "utf8"));
+    assert.equal(persistedSettings.telemetryRetentionDays, 90);
+    assert.equal(persistedSettings.admin.passwordHash, config.admin.passwordHash);
 
     const generatedPasswordResponse = await fetch(`${origin}/api/admin/maintenance/passwords`, {
       method: "POST",

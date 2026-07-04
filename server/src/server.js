@@ -12,6 +12,19 @@ import { compareVersions, UpdateService } from "./update-service.js";
 const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 const publicDirectory = path.resolve(moduleDirectory, "..", "public");
 const DISCOVERY_REQUEST = "SENTRYLOOM_HQ_DISCOVER_V1";
+const HQ_VERSION = "0.4.2";
+const HQ_CAPABILITIES = Object.freeze([
+  "maintenance-authorization-v1",
+  "maintenance-request-v1"
+]);
+const SETTING_OPTIONS = Object.freeze({
+  retentionDays: [30, 90, 365],
+  offlineAfterSeconds: [60, 300, 900],
+  sessionHours: [1, 4, 8, 12, 24],
+  maxLoginAttempts: [5, 10, 20],
+  maintenanceMinutes: [5, 10, 30, 60],
+  maintenanceUses: [1, 3, 10]
+});
 const COMMAND_TYPES = new Set([
   "scan.quick",
   "scan.full",
@@ -63,6 +76,75 @@ function cookies(request) {
 
 function clientAddress(request) {
   return String(request.socket.remoteAddress || "").replace(/^::ffff:/, "");
+}
+
+function selected(value, allowed, fallback) {
+  const numeric = Number(value);
+  return allowed.includes(numeric) ? numeric : fallback;
+}
+
+export function applyHqSettings(config, update = {}) {
+  config.schemaVersion = Math.max(2, Number(config.schemaVersion) || 1);
+  config.telemetryRetentionDays = selected(
+    update.telemetryRetentionDays ?? config.telemetryRetentionDays,
+    SETTING_OPTIONS.retentionDays,
+    30
+  );
+  config.alerts = {
+    ...(config.alerts || {}),
+    offlineAfterSeconds: selected(
+      update.offlineAfterSeconds ?? config.alerts?.offlineAfterSeconds,
+      SETTING_OPTIONS.offlineAfterSeconds,
+      60
+    )
+  };
+  config.admin = {
+    ...config.admin,
+    sessionHours: selected(
+      update.sessionHours ?? config.admin?.sessionHours,
+      SETTING_OPTIONS.sessionHours,
+      12
+    ),
+    maxLoginAttempts: selected(
+      update.maxLoginAttempts ?? config.admin?.maxLoginAttempts,
+      SETTING_OPTIONS.maxLoginAttempts,
+      10
+    )
+  };
+  config.maintenance = {
+    ...(config.maintenance || {}),
+    defaultMinutes: selected(
+      update.maintenanceMinutes ?? config.maintenance?.defaultMinutes,
+      SETTING_OPTIONS.maintenanceMinutes,
+      10
+    ),
+    defaultUses: selected(
+      update.maintenanceUses ?? config.maintenance?.defaultUses,
+      SETTING_OPTIONS.maintenanceUses,
+      1
+    )
+  };
+  config.updates = {
+    ...config.updates,
+    autoDeploy: update.autoDeploy === undefined
+      ? Boolean(config.updates?.autoDeploy)
+      : Boolean(update.autoDeploy)
+  };
+  return config;
+}
+
+export function publicHqSettings(config) {
+  return {
+    schemaVersion: config.schemaVersion,
+    telemetryRetentionDays: config.telemetryRetentionDays,
+    offlineAfterSeconds: config.alerts.offlineAfterSeconds,
+    sessionHours: config.admin.sessionHours,
+    maxLoginAttempts: config.admin.maxLoginAttempts,
+    maintenanceMinutes: config.maintenance.defaultMinutes,
+    maintenanceUses: config.maintenance.defaultUses,
+    autoDeploy: Boolean(config.updates.autoDeploy),
+    allowed: SETTING_OPTIONS
+  };
 }
 
 function validateDevice(body) {
@@ -171,6 +253,7 @@ export function buildAdminAlerts(store, options = {}) {
 }
 
 export async function createHqServer(config, options = {}) {
+  applyHqSettings(config);
   const store = options.store || await new HqStore(config.databasePath).open();
   const updateService = options.updateService || new UpdateService(
     config.updates?.directory || path.join(path.dirname(config.databasePath), "updates")
@@ -185,11 +268,41 @@ export async function createHqServer(config, options = {}) {
   function adminSession(request) {
     const id = cookies(request).sentryloom_hq_session;
     const session = sessions.get(id);
-    if (!session || Date.now() - session.createdAt > 12 * 60 * 60 * 1000) {
+    if (!session || Date.now() - session.createdAt > config.admin.sessionHours * 60 * 60 * 1000) {
       if (id) sessions.delete(id);
       return null;
     }
     return session;
+  }
+
+  async function persistHqSettings() {
+    if (!options.configPath) return;
+    const current = JSON.parse(await fs.readFile(options.configPath, "utf8"));
+    current.schemaVersion = config.schemaVersion;
+    current.telemetryRetentionDays = config.telemetryRetentionDays;
+    current.alerts = { ...(current.alerts || {}), ...config.alerts };
+    current.admin = {
+      ...current.admin,
+      sessionHours: config.admin.sessionHours,
+      maxLoginAttempts: config.admin.maxLoginAttempts
+    };
+    current.maintenance = { ...(current.maintenance || {}), ...config.maintenance };
+    current.updates = {
+      ...(current.updates || {}),
+      autoDeploy: Boolean(config.updates.autoDeploy)
+    };
+    const temporary = `${options.configPath}.${process.pid}.${crypto.randomBytes(6).toString("hex")}.tmp`;
+    await fs.writeFile(temporary, `${JSON.stringify(current, null, 2)}\n`, {
+      encoding: "utf8",
+      mode: 0o600,
+      flag: "wx"
+    });
+    try {
+      await fs.rename(temporary, options.configPath);
+    } catch (error) {
+      await fs.rm(temporary, { force: true }).catch(() => {});
+      throw error;
+    }
   }
 
   function clientSession(request) {
@@ -205,6 +318,8 @@ export async function createHqServer(config, options = {}) {
         sendJson(response, 200, {
           protocol: "sentryloom-hq/1",
           name: config.hqName,
+          version: HQ_VERSION,
+          capabilities: HQ_CAPABILITIES,
           fingerprint256: config.tls.fingerprint256
         });
         return;
@@ -213,7 +328,7 @@ export async function createHqServer(config, options = {}) {
       if (request.method === "POST" && url.pathname === "/api/v1/enroll") {
         const address = clientAddress(request);
         const prior = loginAttempts.get(address) || { count: 0, since: Date.now() };
-        if (Date.now() - prior.since < 60000 && prior.count >= 10) {
+        if (Date.now() - prior.since < 60000 && prior.count >= config.admin.maxLoginAttempts) {
           sendJson(response, 429, { error: "Too many enrollment attempts" });
           return;
         }
@@ -298,7 +413,11 @@ export async function createHqServer(config, options = {}) {
             }
           }
           sendJson(response, 202, {
-            receivedAt
+            receivedAt,
+            hq: {
+              version: HQ_VERSION,
+              capabilities: HQ_CAPABILITIES
+            }
           });
           return;
         }
@@ -461,14 +580,15 @@ export async function createHqServer(config, options = {}) {
         }
         if (request.method === "GET" && url.pathname === "/api/admin/bootstrap") {
           sendJson(response, 200, {
-            hq: { name: config.hqName, version: "0.4.1" },
+            hq: { name: config.hqName, version: HQ_VERSION },
             csrf: session.csrf,
             devices: store.listDevices(),
             enrollmentRequests: store.listEnrollmentRequests(),
             maintenance: {
               passwords: store.listMaintenancePasswords(),
               requests: store.listMaintenanceRequests()
-            }
+            },
+            settings: publicHqSettings(config)
           });
           return;
         }
@@ -477,10 +597,27 @@ export async function createHqServer(config, options = {}) {
           return;
         }
         if (request.method === "GET" && url.pathname === "/api/admin/alerts") {
+          const offlineAfterMs = config.alerts.offlineAfterSeconds * 1000;
           sendJson(response, 200, {
             generatedAt: new Date().toISOString(),
-            offlineAfterMs: 60000,
-            alerts: buildAdminAlerts(store)
+            offlineAfterMs,
+            alerts: buildAdminAlerts(store, { offlineAfterMs })
+          });
+          return;
+        }
+        if (request.method === "GET" && url.pathname === "/api/admin/settings") {
+          sendJson(response, 200, publicHqSettings(config));
+          return;
+        }
+        if (request.method === "PATCH" && url.pathname === "/api/admin/settings") {
+          const body = await readJson(request);
+          applyHqSettings(config, body);
+          await persistHqSettings();
+          const pruning = store.pruneOperationalData(config.telemetryRetentionDays);
+          sendJson(response, 200, {
+            settings: publicHqSettings(config),
+            pruning,
+            appliedAt: new Date().toISOString()
           });
           return;
         }
@@ -503,8 +640,8 @@ export async function createHqServer(config, options = {}) {
           const body = await readJson(request);
           const password = `SL-${crypto.randomBytes(24).toString("base64url")}`;
           const policy = store.createMaintenancePassword(password, {
-            minutes: body.minutes,
-            uses: body.uses,
+            minutes: body.minutes ?? config.maintenance.defaultMinutes,
+            uses: body.uses ?? config.maintenance.defaultUses,
             source: "administrator"
           });
           sendJson(response, 201, {

@@ -4,7 +4,67 @@ All notable changes to SentryLoom will be documented here.
 
 The project uses semantic versioning where practical.
 
-## [Unreleased]
+## [0.16.3] - 2026-07-04
+
+SentryLoom Endpoint Security v0.16.3 ships with SentryLoom HQ v0.4.2. This
+release focuses on reliable cross-computer enrollment, state-preserving
+Windows Setup upgrades, explicit protected-setting authorization, configurable
+on-premises security telemetry retention, and trustworthy ClamAV updates.
+
+### Cross-computer HQ enrollment and compatibility
+
+- Fixed an upgrade defect where preserved credentials for an old HQ, such as
+  `192.168.1.9`, remained authoritative after Setup successfully submitted an
+  approval request to a newly entered server, such as `192.168.1.12`.
+- A successfully submitted enrollment request now removes the previous
+  encrypted HQ credential and stale connector snapshot. The resident client
+  polls the new server, receives the approved token, resumes telemetry, and
+  uses that server for maintenance authorization.
+- Direct enrollment now clears obsolete pending-request state.
+- Added HQ capability/version negotiation so older servers produce one
+  actionable compatibility message instead of repeated “Device API route not
+  found” errors.
+- Changed absent remote capability metadata from “unsupported” to
+  “legacy/unknown and verify on use,” preventing false HQ upgrade warnings
+  between clients and servers running on different computers.
+- Compatibility errors now identify the actual HQ URL being contacted so an
+  operator can immediately detect an unintended server address.
+
+### Endpoint settings and ClamAV reliability
+
+- Added explicit per-setting authorization badges for standalone, password
+  required, HQ offline, compatibility-checking, and HQ-upgrade-required states.
+- Fixed FreshClam HTTPS error 60 on Windows by exporting the Windows trusted
+  root stores to a private PEM bundle and passing it through
+  `CURL_CA_BUNDLE`; TLS verification remains enabled.
+- Added actionable FreshClam diagnostics for clock, TLS inspection, and
+  trusted-root policy failures.
+
+### Upgrade-safe endpoint and HQ state
+
+- Added state-preserving Setup upgrades for endpoint settings, enrollment,
+  credentials, quarantine, logs, history, threat data, certificates, HQ
+  databases, and operational metadata.
+- Added versioned configuration migrations, restricted pre-upgrade backups,
+  and preservation manifests; state changes only through explicit schema
+  migrations.
+
+### HQ data retention and server policy
+
+- Added discrete HQ controls for 30/90/365-day logging and telemetry retention,
+  offline alert delay, administrator session lifetime, failed-login rate
+  limits, maintenance password defaults, and signed-update auto-deployment.
+- Retention cleanup runs immediately after a policy change and every six hours
+  while preserving current device state and active security records.
+
+### Documentation and quality
+
+- Added a management PowerPoint with real endpoint and HQ screenshots.
+- Added a complete Word operator guide covering installation on separate
+  computers, enrollment, firewall rules, daily operation, maintenance
+  authorization, updates, recovery, and troubleshooting.
+- Added regression coverage proving that a new HQ request supersedes preserved
+  credentials for a previous server.
 
 ## [0.16.1] - 2026-07-04
 

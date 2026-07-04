@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>SentryLoom HQ</title>
-  <link rel="stylesheet" href="/styles.css?v=0.4.1">
-  <link rel="stylesheet" href="/approvals.css?v=0.4.1">
-  <link rel="stylesheet" href="/device-details.css?v=0.4.1">
-  <link rel="stylesheet" href="/alerts.css?v=0.4.1">
+  <link rel="stylesheet" href="/styles.css?v=0.4.2">
+  <link rel="stylesheet" href="/approvals.css?v=0.4.2">
+  <link rel="stylesheet" href="/device-details.css?v=0.4.2">
+  <link rel="stylesheet" href="/alerts.css?v=0.4.2">
 </head>
 <body>
   <section class="login" id="login">
@@ -50,6 +50,73 @@
         </div>
         <div class="update-release" id="update-release">
           <div class="detail-loading">Loading update status…</div>
+        </div>
+      </section>
+      <section class="panel server-settings-panel">
+        <div class="panel-head">
+          <div><p>SERVER POLICY</p><h2>HQ data and operations settings</h2></div>
+          <span id="server-settings-state">Changes are retained across Setup upgrades</span>
+        </div>
+        <div class="server-settings-grid" id="server-settings-form">
+          <label>Data and logging retention
+            <select id="setting-retention-days">
+              <option value="30">30 days</option>
+              <option value="90">90 days</option>
+              <option value="365">365 days</option>
+            </select>
+            <small>Telemetry, completed commands, and reviewed request history.</small>
+          </label>
+          <label>Endpoint offline alert
+            <select id="setting-offline-seconds">
+              <option value="60">After 1 minute</option>
+              <option value="300">After 5 minutes</option>
+              <option value="900">After 15 minutes</option>
+            </select>
+            <small>Controls when HQ raises a disconnected-device alert.</small>
+          </label>
+          <label>Administrator session
+            <select id="setting-session-hours">
+              <option value="1">1 hour</option>
+              <option value="4">4 hours</option>
+              <option value="8">8 hours</option>
+              <option value="12">12 hours</option>
+              <option value="24">24 hours</option>
+            </select>
+            <small>Inactive dashboard sessions must sign in again afterward.</small>
+          </label>
+          <label>Failed login limit
+            <select id="setting-login-attempts">
+              <option value="5">5 attempts/minute</option>
+              <option value="10">10 attempts/minute</option>
+              <option value="20">20 attempts/minute</option>
+            </select>
+            <small>Per-address administrator sign-in rate limit.</small>
+          </label>
+          <label>Default maintenance lifetime
+            <select id="setting-maintenance-minutes">
+              <option value="5">5 minutes</option>
+              <option value="10">10 minutes</option>
+              <option value="30">30 minutes</option>
+              <option value="60">60 minutes</option>
+            </select>
+            <small>Default for newly generated endpoint passwords.</small>
+          </label>
+          <label>Default maintenance uses
+            <select id="setting-maintenance-uses">
+              <option value="1">One use</option>
+              <option value="3">3 uses</option>
+              <option value="10">10 uses</option>
+            </select>
+            <small>Maximum successful protected actions per generated password.</small>
+          </label>
+          <label class="server-setting-toggle">
+            <input type="checkbox" id="setting-auto-deploy">
+            <span><strong>Automatically deploy signed client updates</strong><small>Only newer packages accepted by the existing signature policy are queued.</small></span>
+          </label>
+        </div>
+        <div class="server-settings-actions">
+          <button class="primary" id="save-server-settings">Save server settings</button>
+          <span>Retention cleanup runs immediately and then every six hours.</span>
         </div>
       </section>
       <section class="panel maintenance-panel">
@@ -146,6 +213,6 @@
     </section>
   </dialog>
   <div class="toast" id="toast"></div>
-  <script type="module" src="/app.js?v=0.4.1"></script>
+  <script type="module" src="/app.js?v=0.4.2"></script>
 </body>
 </html>

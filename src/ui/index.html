@@ -182,6 +182,10 @@
       </section>
 
       <section class="page" id="page-settings">
+        <div class="settings-access-summary" id="settings-access-summary">
+          <strong>Setting authorization is being checked</strong>
+          <span>SentryLoom will label every protected control before you make a change.</span>
+        </div>
         <article class="panel settings-panel">
           <div class="panel-heading"><div><p class="eyebrow">PROTECTION POLICY</p><h3>Local security controls</h3></div></div>
           <label class="toggle-row"><span><strong>Realtime file monitoring</strong><small>Watch your user profile for changed files.</small></span><input type="checkbox" id="setting-realtime"><i></i></label>
@@ -267,7 +271,7 @@
             <div><p class="eyebrow">THREAT INTELLIGENCE</p><h3>Virus databases</h3></div>
             <button class="primary" id="update-all-feeds">Update all databases</button>
           </div>
-          <p class="muted">Updates require internet access. Scanning remains completely local after the feeds are indexed.</p>
+          <p class="muted">Updates require internet access. Scanning remains completely local after the feeds are indexed. <span class="setting-auth-badge open">No maintenance password required</span></p>
           <div class="feed-grid">
             <div class="feed-card" data-feed="clamav">
               <div><strong>ClamAV Official</strong><small>Cisco Talos maintained signatures</small></div>
@@ -303,7 +307,7 @@
           <div class="credential-row">
             <div>
               <label for="abuse-auth-key"><strong>abuse.ch Auth-Key</strong></label>
-              <small>Required by MalwareBazaar, URLhaus, and ThreatFox. Stored locally with authenticated encryption.</small>
+              <small>Required by MalwareBazaar, URLhaus, and ThreatFox. Stored locally with authenticated encryption. <span class="setting-auth-badge open">No maintenance password required</span></small>
             </div>
             <input id="abuse-auth-key" type="password" autocomplete="off" placeholder="Paste your free Auth-Key">
             <button class="secondary" id="save-auth-key">Save key</button>

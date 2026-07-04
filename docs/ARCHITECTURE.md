@@ -46,6 +46,12 @@ hash-only, expiring, use-limited, and revocable. For interactive requests the
 endpoint creates an ephemeral RSA key pair, HQ allows 20 seconds for approval,
 and the approved one-time password is encrypted to that key before delivery.
 
+Endpoint and HQ configuration are migrated by explicit schema version.
+Installers create access-restricted pre-upgrade snapshots before replacing
+program files. Mutable data stays outside packaged source files and is retained
+across upgrades. HQ prunes historical telemetry and completed operational
+records according to the administrator-selected 30, 90, or 365-day policy.
+
 ## Detection policy
 
 Exact hash or explicitly confirmed content signatures may be quarantined automatically. Filename, entropy, format mismatch, and behavior-like script rules are heuristic and report-only by default. This separation is deliberate: aggressive automatic heuristics cause destructive false positives.

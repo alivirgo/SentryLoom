@@ -39,7 +39,7 @@ publish the signed Setup executable from an elevated HQ PowerShell session:
 
 ```powershell
 .\Publish-SentryLoomUpdate.ps1 `
-  -SetupFile C:\Releases\SentryLoom-Setup-0.16.1.exe `
+  -SetupFile C:\Releases\SentryLoom-Setup-0.16.3.exe `
   -ReleaseNotes 'Security engine and stability update'
 ```
 
@@ -59,7 +59,7 @@ commands remain allowlisted and cannot execute arbitrary commands.
 
 ## Initialize on the HQ Windows server
 
-Run `SentryLoom-HQ-Setup-0.4.1.exe` and provide the server's DNS/computer name.
+Run `SentryLoom-HQ-Setup-0.4.2.exe` and provide the server's DNS/computer name.
 Setup installs prerequisites, initializes new servers, preserves existing data
 during upgrades, registers the self-restarting startup task, and asks for the
 administrator password with confirmation. On upgrade, the entered password
@@ -70,6 +70,17 @@ are separate from the HQ console password: they are long, expiring,
 use-limited, revocable, and stored only as hashes. Endpoints can request a
 one-time password for immediate administrator approval; the approval window is
 20 seconds and delivery is encrypted to that endpoint.
+
+The **HQ data and operations settings** panel provides discrete controls for
+30/90/365-day logging retention, offline alert delay, administrator session
+lifetime, failed-login limits, maintenance-password defaults, and automatic
+deployment of trusted signed updates. Settings are written atomically to the
+existing HQ configuration.
+
+Setup upgrades stop HQ before making a restricted administrator-only backup of
+the database, TLS certificate, configuration, update repository, and
+operational history. Existing values are retained unless a versioned schema
+migration explicitly changes them.
 
 For a source installation, run PowerShell as Administrator:
 

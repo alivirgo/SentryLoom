@@ -1,5 +1,5 @@
 #define MyAppName "SentryLoom Endpoint Security"
-#define MyAppVersion "0.16.1"
+#define MyAppVersion "0.16.3"
 #define MyAppPublisher "NUC7 Studios"
 #define MyAppExeName "SentryLoom.exe"
 
@@ -34,6 +34,7 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 
 [Files]
 Source: "..\Stop-SentryLoom.ps1"; Flags: dontcopy noencryption
+Source: "..\Backup-SentryLoomState.ps1"; Flags: dontcopy noencryption
 Source: "..\build\output\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\src\*"; DestDir: "{app}\src"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\signatures\base.json"; DestDir: "{app}\signatures"; Flags: ignoreversion
@@ -45,10 +46,11 @@ Source: "..\Set-SentryLoomDns.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\Set-SentryLoomUsbStorage.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\Show-SentryLoomNotification.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\Authorize-SentryLoomMaintenance.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\Backup-SentryLoomState.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\Update-SentryLoom.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\SECURITY.md"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\docs\*"; DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\docs\*"; DestDir: "{app}\docs"; Excludes: "releases\*"; Flags: ignoreversion recursesubdirs createallsubdirs
 [Run]
 Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Description: "Open SentryLoom security console"; Flags: postinstall nowait skipifsilent
 
@@ -236,14 +238,16 @@ end;
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   ResultCode: Integer;
-  StopScript, FailureLog, Details: String;
+  StopScript, BackupScript, FailureLog, Details: String;
   DetailsAnsi: AnsiString;
 begin
   Result := '';
   NeedsRestart := False;
   InstallDetail('Checking for and stopping a previous SentryLoom version.');
   ExtractTemporaryFile('Stop-SentryLoom.ps1');
+  ExtractTemporaryFile('Backup-SentryLoomState.ps1');
   StopScript := ExpandConstant('{tmp}\Stop-SentryLoom.ps1');
+  BackupScript := ExpandConstant('{tmp}\Backup-SentryLoomState.ps1');
   FailureLog := ExpandConstant('{tmp}\SentryLoom-Stop-Error.txt');
   if (not RunHidden(
     GetPowerShellPath(''),
@@ -261,7 +265,23 @@ begin
     Result :=
       'Setup could not stop the previous SentryLoom instance.' + #13#10 + #13#10 +
       Details + #13#10 + #13#10 + 'Exit code: ' + IntToStr(ResultCode);
+    Exit;
   end;
+  InstallDetail('Preserving settings, enrollment, credentials, quarantine, logs, history, and runtime state.');
+  if (not RunHidden(
+    GetPowerShellPath(''),
+    '-NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "' +
+      BackupScript + '" -TargetVersion "{#MyAppVersion}"',
+    ExpandConstant('{tmp}'),
+    ResultCode)) or (ResultCode <> 0) then
+  begin
+    Result :=
+      'Setup stopped because it could not preserve the existing SentryLoom state.' +
+      Chr(13) + Chr(10) + Chr(13) + Chr(10) +
+      'Exit code: ' + IntToStr(ResultCode);
+    Exit;
+  end;
+  InstallDetail('Existing endpoint state was preserved before application files are replaced.');
 end;
 
 procedure InstallPrerequisites;
@@ -360,6 +380,7 @@ begin
     begin
       HqEnrollmentConfigured := True;
       InstallDetail('HQ was found and the endpoint approval request was submitted.');
+      InstallDetail('The selected HQ is now the active enrollment target; any previous server credential was retired.');
       SetupWarnings := SetupWarnings +
         'This endpoint is waiting for approval in the SentryLoom HQ console. Local protection is already active.' + #13#10;
     end;

@@ -588,6 +588,41 @@ export class HqStore {
     return this.database.prepare("DELETE FROM telemetry WHERE received_at < ?").run(cutoff).changes;
   }
 
+  pruneOperationalData(days) {
+    const retentionDays = [30, 90, 365].includes(Number(days)) ? Number(days) : 30;
+    const cutoff = new Date(Date.now() - retentionDays * 86400000).toISOString();
+    const telemetry = this.database.prepare(
+      "DELETE FROM telemetry WHERE received_at < ?"
+    ).run(cutoff).changes;
+    const commands = this.database.prepare(`
+      DELETE FROM commands
+      WHERE created_at < ? AND status IN ('completed', 'failed', 'rejected')
+    `).run(cutoff).changes;
+    const enrollmentRequests = this.database.prepare(`
+      DELETE FROM enrollment_requests
+      WHERE requested_at < ? AND status IN ('rejected', 'provisioned')
+    `).run(cutoff).changes;
+    const maintenanceRequests = this.database.prepare(`
+      DELETE FROM maintenance_requests
+      WHERE requested_at < ? AND status IN ('approved', 'rejected', 'expired')
+    `).run(cutoff).changes;
+    const maintenancePasswords = this.database.prepare(`
+      DELETE FROM maintenance_passwords
+      WHERE created_at < ? AND (revoked_at IS NOT NULL OR expires_at < ?)
+    `).run(cutoff, new Date().toISOString()).changes;
+    return {
+      retentionDays,
+      cutoff,
+      deleted: {
+        telemetry,
+        commands,
+        enrollmentRequests,
+        maintenanceRequests,
+        maintenancePasswords
+      }
+    };
+  }
+
   listDevices() {
     return this.database.prepare(`
       SELECT id, installation_id, name, hostname, platform, app_version,

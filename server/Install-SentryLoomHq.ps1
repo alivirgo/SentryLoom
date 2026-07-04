@@ -6,7 +6,8 @@ param(
     [int]$Port = 8443,
     [string]$ResultPath,
     [string]$AdminPasswordFile,
-    [string]$InstallLogPath
+    [string]$InstallLogPath,
+    [string]$TargetVersion = '0.4.2'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -69,6 +70,37 @@ function Wait-HqListener([int]$ListenerPort) {
     Write-InstallStep "HQ is accepting HTTPS connections on TCP port $ListenerPort."
 }
 
+function Backup-HqState([string]$DataPath, [string]$TargetVersion) {
+    if (-not (Test-Path -LiteralPath $DataPath -PathType Container)) { return $null }
+    $Stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+    $Backup = Join-Path $env:ProgramData "SentryLoom HQ\UpgradeBackups\$Stamp-$TargetVersion"
+    New-Item -ItemType Directory -Path $Backup -Force | Out-Null
+    $CurrentSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    & "$env:WINDIR\System32\icacls.exe" `
+        $Backup `
+        '/inheritance:r' `
+        '/grant:r' `
+        '*S-1-5-18:(OI)(CI)F' `
+        '*S-1-5-32-544:(OI)(CI)F' `
+        "*${CurrentSid}:(OI)(CI)F" | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Could not restrict the HQ upgrade-backup permissions.'
+    }
+    Get-ChildItem -LiteralPath $DataPath -Force | ForEach-Object {
+        Copy-Item -LiteralPath $_.FullName -Destination $Backup -Recurse -Force
+    }
+    @{
+        schemaVersion = 1
+        createdAt = (Get-Date).ToUniversalTime().ToString('o')
+        targetVersion = $TargetVersion
+        source = $DataPath
+        backup = $Backup
+        policy = 'retain-unless-versioned-migration'
+    } | ConvertTo-Json -Depth 4 |
+        Set-Content -LiteralPath (Join-Path $Backup 'upgrade-backup.json') -Encoding UTF8 -Force
+    return $Backup
+}
+
 try {
     if ($SelectedPassword) {
         $env:SENTRYLOOM_HQ_SETUP_ADMIN_PASSWORD = $SelectedPassword
@@ -105,6 +137,13 @@ try {
 
     Write-InstallStep 'Stopping any running HQ task before configuration is replaced.'
     Stop-ScheduledTask -TaskName 'SentryLoom HQ Server' -ErrorAction SilentlyContinue
+    $StateBackup = $null
+    if (-not $FreshInstall) {
+        Write-InstallStep 'Preserving the HQ database, settings, TLS certificate, updates, and operational history.'
+        Start-Sleep -Milliseconds 750
+        $StateBackup = Backup-HqState (Join-Path $PSScriptRoot 'data') $TargetVersion
+        Write-InstallStep "Existing HQ state was preserved at $StateBackup."
+    }
     $PasswordUpdated = $false
     if ($SelectedPassword) {
         Write-InstallStep 'Hashing the administrator password selected in Setup.'
@@ -213,6 +252,7 @@ try {
         "Certificate SHA-256: $($Config.tls.fingerprint256)"
         ''
         $DataSummary
+        $(if ($StateBackup) { "Upgrade backup: $StateBackup" } else { 'Upgrade backup: not required for a first installation.' })
         $PasswordSummary
         'Firewall: HTTPS and LAN discovery rules are enabled.'
         "Detailed log: $InstallLog"

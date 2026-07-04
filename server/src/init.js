@@ -19,7 +19,7 @@ const iterations = 310000;
 const base = path.dirname(configPath);
 await fs.mkdir(base, { recursive: true });
 const config = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   hqName: process.env.SENTRYLOOM_HQ_NAME || "SentryLoom HQ",
   host: "0.0.0.0",
   port: Number(process.env.SENTRYLOOM_HQ_PORT) || 8443,
@@ -33,10 +33,19 @@ const config = {
   admin: {
     iterations,
     salt,
-    passwordHash: hashAdminPassword(process.env.SENTRYLOOM_HQ_ADMIN_PASSWORD, salt, iterations)
+    passwordHash: hashAdminPassword(process.env.SENTRYLOOM_HQ_ADMIN_PASSWORD, salt, iterations),
+    sessionHours: 12,
+    maxLoginAttempts: 10
   },
   discovery: { enabled: true, port: 32110 },
   telemetryRetentionDays: 30,
+  alerts: {
+    offlineAfterSeconds: 60
+  },
+  maintenance: {
+    defaultMinutes: 10,
+    defaultUses: 1
+  },
   updates: {
     directory: "updates",
     autoDeploy: false

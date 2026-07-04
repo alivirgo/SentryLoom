@@ -15,6 +15,7 @@ the HQ operations-alert feed.
 | Server is unavailable | Client raises one actionable Windows notification; repeated retries are deduplicated | HQ dashboard visibly reports its own API connection loss |
 | Connection is restored | Client emits and displays a recovery notification | Dashboard updates online state and clears the availability alert |
 | Threat or monitoring failure | Client emits a Windows notification and dashboard activity event | HQ alert feed shows detections, endpoint failures, and failed remote commands |
+| Setup requests a different HQ | After the new target accepts the enrollment request, the client removes the prior encrypted credential and stale connector state, then polls the new approval | The selected HQ provisions the approved endpoint and begins receiving telemetry |
 
 The resident endpoint task also owns a notification-area status icon. It is
 green while the latest connector heartbeat reports HQ online and red when HQ is

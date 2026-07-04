@@ -52,6 +52,12 @@ HQ administrators control retention, host access, backups, firewall scope, and
 deletion. Uninstalling preserves server data unless the administrator
 explicitly requests its removal.
 
+HQ data retention is configurable to 30, 90, or 365 days. The selected policy
+applies to telemetry snapshots, completed command history, reviewed enrollment
+requests, and expired maintenance records. Current device state and active
+security records remain available. Setup upgrade backups are restricted to
+Local System, local Administrators, and the installing Windows account.
+
 ## Local secrets
 
 Endpoint credentials are encrypted locally with AES-256-GCM. HQ administrator

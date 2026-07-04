@@ -27,6 +27,12 @@ to understand and control where their endpoint telemetry goes.
 It works fully offline for local protection. Connecting an endpoint to
 SentryLoom HQ is optional, explicit, certificate-pinned, and self-hosted.
 
+Management and operations resources:
+
+- [Management presentation](docs/management/SentryLoom-Management-Presentation.pptx)
+- [Complete endpoint and HQ user guide](docs/guides/SentryLoom-Complete-User-Guide.docx)
+- [Connection resilience test plan](docs/CONNECTION-RESILIENCE.md)
+
 > [!IMPORTANT]
 > SentryLoom is an actively developed user-mode security project, not a
 > certified replacement for Microsoft Defender or a mature commercial EDR.
@@ -249,6 +255,24 @@ hashes, expire after 5–60 minutes, have a bounded use count, and can be revoke
 immediately. An endpoint may alternatively request approval while an
 administrator is online; that request expires after 20 seconds and its
 one-time password is RSA-encrypted for the requesting endpoint.
+
+Setup upgrades preserve endpoint and HQ operational state. Before replacing
+application files, Setup creates an administrator-only backup of settings,
+encrypted credentials, enrollment, quarantine, logs, history, threat data,
+certificates, databases, updates, and policy metadata. Runtime configuration
+uses versioned schema migrations that retain existing values and add only new
+defaults unless a release explicitly documents a changed field.
+
+When Setup successfully submits an enrollment request to an explicitly entered
+HQ URL, that server becomes the new management target. Preserved credentials
+and connector state for a previous HQ are removed only after the new target
+accepts the request. This prevents an upgraded endpoint from submitting
+approval to one computer while silently reconnecting to an old address.
+
+HQ exposes discrete server-policy controls for 30, 90, or 365 days of data
+retention, endpoint offline-alert delay, administrator session lifetime,
+failed-login rate limiting, default maintenance-password lifetime/use count,
+and automatic deployment of trusted signed client updates.
 
 ### CLI
 

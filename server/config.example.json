@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "hqName": "SentryLoom HQ",
   "host": "0.0.0.0",
   "port": 8443,
@@ -13,13 +13,22 @@
   "admin": {
     "iterations": 310000,
     "salt": "base64-salt",
-    "passwordHash": "base64-pbkdf2-sha256-hash"
+    "passwordHash": "base64-pbkdf2-sha256-hash",
+    "sessionHours": 12,
+    "maxLoginAttempts": 10
   },
   "discovery": {
     "enabled": true,
     "port": 32110
   },
   "telemetryRetentionDays": 30,
+  "alerts": {
+    "offlineAfterSeconds": 60
+  },
+  "maintenance": {
+    "defaultMinutes": 10,
+    "defaultUses": 1
+  },
   "updates": {
     "directory": "updates",
     "autoDeploy": false

@@ -545,7 +545,16 @@ export class AntivirusEngine {
         ? delegatedState.lastError || null
         : this.hqDelegated ? "Background protection agent is not reporting management status" : null,
       nextRetryAt: delegatedStateFresh ? delegatedState.nextRetryAt || null : null,
-      activeCommands: delegatedStateFresh ? delegatedState.activeCommands || 0 : 0
+      activeCommands: delegatedStateFresh ? delegatedState.activeCommands || 0 : 0,
+      hqVersion: delegatedStateFresh ? delegatedState.hqVersion || null : null,
+      hqCapabilities: delegatedStateFresh && Array.isArray(delegatedState.hqCapabilities)
+        ? delegatedState.hqCapabilities
+        : [],
+      maintenanceAuthorizationSupported: delegatedStateFresh
+        ? delegatedState.maintenanceAuthorizationSupported === true
+          ? true
+          : delegatedState.maintenanceAuthorizationSupported === false ? false : null
+        : null
     };
   }
 

@@ -225,6 +225,19 @@ td.path { font-family: "Cascadia Mono", Consolas, monospace; color: var(--muted-
 .activity-item pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family: "Cascadia Mono", Consolas, monospace; font-size: 10px; line-height: 1.55; }
 .background-output { max-height: 420px; overflow: auto; margin: 14px 0 0; padding: 14px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface-2); color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; font: 11px/1.55 "Cascadia Mono", Consolas, monospace; }
 .settings-panel { max-width: 920px; }
+.settings-access-summary { max-width: 920px; display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-2); }
+.settings-access-summary strong { font-size: 12px; }
+.settings-access-summary span { color: var(--muted); font-size: 10px; text-align: right; }
+.settings-access-summary.ready { border-color: #2e6b5d; background: var(--green-soft); }
+.settings-access-summary.warning { border-color: #72572f; background: #281f12; }
+.settings-access-summary.error { border-color: #834646; background: #291616; }
+.setting-auth-badge { display: inline-flex !important; width: max-content; align-items: center; gap: 5px; margin-top: 5px !important; padding: 3px 7px; border: 1px solid #72572f; border-radius: 999px; color: var(--amber) !important; background: #281f12; font-size: 9px !important; font-weight: 650; letter-spacing: .15px; }
+.setting-auth-badge::before { content: "LOCK"; font-size: 7px; }
+.setting-auth-badge.open { border-color: #2e6b5d; color: var(--green) !important; background: var(--green-soft); }
+.setting-auth-badge.open::before { content: "OK"; }
+.setting-auth-badge.blocked { border-color: #834646; color: #ef8c8c !important; background: #291616; }
+.setting-auth-badge.blocked::before { content: "!"; }
+.setting-auth-button-note { margin-left: 7px; vertical-align: middle; }
 .intel-panel { margin-top: 16px; }
 .dns-panel { margin-top: 16px; }
 .device-panel { margin-top: 16px; }
@@ -369,6 +382,8 @@ html[data-theme="light"] #toast.error { color: #6f2424; border-color: #d49a9a; b
   .hq-maintenance button, .hq-maintenance small { grid-column: auto; }
   .hq-actions { align-items: stretch; flex-direction: column; }
   .hq-actions select { min-width: 0; width: 100%; }
+  .settings-access-summary { align-items: flex-start; flex-direction: column; }
+  .settings-access-summary span { text-align: left; }
   .panel { padding: 18px; }
   .panel-heading { gap: 12px; }
   .metrics { gap: 6px; }

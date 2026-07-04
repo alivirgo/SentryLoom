@@ -3,6 +3,9 @@ let devices = [];
 let enrollmentRequests = [];
 let updateState = { update: null, autoDeploy: false };
 let maintenanceState = { passwords: [], requests: [] };
+let serverSettings = null;
+let serverSettingsDirty = false;
+let serverSettingsRendered = false;
 let activeAlerts = [];
 let knownAlertIds = null;
 let knownMaintenanceRequestIds = null;
@@ -375,6 +378,23 @@ function renderMaintenance() {
   }).join("");
 }
 
+function renderServerSettings(settings) {
+  serverSettings = settings;
+  if (serverSettingsDirty) return;
+  $("#setting-retention-days").value = String(settings.telemetryRetentionDays);
+  $("#setting-offline-seconds").value = String(settings.offlineAfterSeconds);
+  $("#setting-session-hours").value = String(settings.sessionHours);
+  $("#setting-login-attempts").value = String(settings.maxLoginAttempts);
+  $("#setting-maintenance-minutes").value = String(settings.maintenanceMinutes);
+  $("#setting-maintenance-uses").value = String(settings.maintenanceUses);
+  $("#setting-auto-deploy").checked = Boolean(settings.autoDeploy);
+  if (!serverSettingsRendered) {
+    $("#maintenance-minutes").value = String(settings.maintenanceMinutes);
+    $("#maintenance-uses").value = String(settings.maintenanceUses);
+  }
+  serverSettingsRendered = true;
+}
+
 async function refreshDeviceDetails(force = false) {
   if (!selectedDeviceId || detailRequestActive) return;
   if (!force && !$("#device-dialog").open) return;
@@ -388,16 +408,18 @@ async function refreshDeviceDetails(force = false) {
 
 async function refresh() {
   let alertState;
-  [devices, enrollmentRequests, updateState, alertState, maintenanceState] = await Promise.all([
+  [devices, enrollmentRequests, updateState, alertState, maintenanceState, serverSettings] = await Promise.all([
     api("/api/admin/devices"),
     api("/api/admin/enrollment-requests"),
     api("/api/admin/update"),
     api("/api/admin/alerts"),
-    api("/api/admin/maintenance")
+    api("/api/admin/maintenance"),
+    api("/api/admin/settings")
   ]);
   renderFleet();
   renderAlerts(alertState);
   renderMaintenance();
+  renderServerSettings(serverSettings);
   await refreshDeviceDetails();
   setServerAvailability(true);
 }
@@ -435,6 +457,44 @@ $("#update-release").addEventListener("click", async (event) => {
     const result = await api("/api/admin/update/deploy", { method: "POST", body: "{}" });
     toast(`Update ${result.version}: ${result.queued} queued, ${result.alreadyQueued} already pending`);
     await refresh();
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$("#server-settings-form").addEventListener("change", () => {
+  serverSettingsDirty = true;
+  $("#server-settings-state").textContent = "Unsaved changes";
+});
+
+$("#save-server-settings").addEventListener("click", async () => {
+  const button = $("#save-server-settings");
+  try {
+    button.disabled = true;
+    const result = await api("/api/admin/settings", {
+      method: "PATCH",
+      body: JSON.stringify({
+        telemetryRetentionDays: Number($("#setting-retention-days").value),
+        offlineAfterSeconds: Number($("#setting-offline-seconds").value),
+        sessionHours: Number($("#setting-session-hours").value),
+        maxLoginAttempts: Number($("#setting-login-attempts").value),
+        maintenanceMinutes: Number($("#setting-maintenance-minutes").value),
+        maintenanceUses: Number($("#setting-maintenance-uses").value),
+        autoDeploy: $("#setting-auto-deploy").checked
+      })
+    });
+    serverSettingsDirty = false;
+    serverSettingsRendered = false;
+    renderServerSettings(result.settings);
+    updateState.autoDeploy = result.settings.autoDeploy;
+    const deleted = Object.values(result.pruning?.deleted || {})
+      .reduce((sum, value) => sum + Number(value || 0), 0);
+    $("#server-settings-state").textContent =
+      `Saved · ${result.settings.telemetryRetentionDays}-day retention · ${deleted} expired record(s) removed`;
+    toast("HQ server settings saved");
+    renderUpdateRelease();
   } catch (error) {
     toast(error.message);
   } finally {
