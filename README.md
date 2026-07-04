@@ -298,6 +298,8 @@ Tests use temporary data directories and harmless industry test markers.
 
 - Review [SECURITY.md](SECURITY.md) for implemented safeguards, limitations,
   hardening priorities, and private vulnerability reporting.
+- Review the [privacy disclosure](PRIVACY.md) and
+  [code signing policy](CODE_SIGNING_POLICY.md).
 - Do not upload real malware, quarantine objects, endpoint logs, credentials,
   certificates, personal files, or customer telemetry to public issues.
 - SentryLoom does not include an arbitrary remote shell and should not be
