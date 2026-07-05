@@ -7,7 +7,7 @@ param(
     [string]$ResultPath,
     [string]$AdminPasswordFile,
     [string]$InstallLogPath,
-    [string]$TargetVersion = '0.4.4'
+    [string]$TargetVersion = '0.4.5'
 )
 
 $ErrorActionPreference = 'Stop'

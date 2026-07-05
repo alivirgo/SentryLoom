@@ -7,6 +7,7 @@ let quarantineRequest = null;
 let discoveredHqServers = [];
 let dashboardReachable = true;
 let hqEnrolled = false;
+let hqConnected = false;
 let hqReEnrollmentRequired = false;
 let hqMaintenanceCompatibility = "standalone";
 let currentHqServerUrl = "";
@@ -208,6 +209,7 @@ function renderHq(status) {
     ? Boolean(status.running && status.lastConnectedAt && !status.lastError)
     : Boolean(status.connected);
   const reconnecting = status.connectionState === "reconnecting" || status.connectionState === "connecting";
+  hqConnected = connected;
   hqReEnrollmentRequired = Boolean(status.reEnrollmentRequired);
   const state = pending ? "PENDING APPROVAL" : verificationFailed ? "CODE REJECTED" : rejected ? "REJECTED" : enrolled
     ? connected ? (status.delegated ? "CONNECTED · BACKGROUND" : "CONNECTED")
@@ -861,6 +863,12 @@ $("#discover-hq").addEventListener("click", async () => {
       return;
     }
     if (hqEnrolled) {
+      if (!hqConnected && discoveredHqServers.length === 1) {
+        select.value = "0";
+        select.dispatchEvent(new Event("change"));
+        toast("One HQ found · verify and reconnect using the pinned identity");
+        return;
+      }
       select.value = "";
       $("#hq-form-state").textContent =
         "Discovery completed without changing the active HQ. Choose a result only when intentionally moving this endpoint.";
@@ -884,8 +892,13 @@ $("#hq-discovered").addEventListener("change", () => {
   if (!server) return;
   $("#hq-url").value = server.url;
   $("#hq-fingerprint").value = server.fingerprint256;
+  if (hqEnrolled && !hqConnected) {
+    $("#enroll-hq").textContent = "Reconnect to moved HQ";
+  }
   $("#hq-form-state").textContent = hqEnrolled
-    ? "Discovered server selected. Load a maintenance password from the current HQ, then submit the server change."
+    ? hqConnected
+      ? "Discovered server selected. Load a maintenance password from the current HQ, then submit the server change."
+      : "Discovered server selected. Reconnect using the pinned certificate and existing device credential."
     : "Discovered server selected. Click “Save server and request approval” to submit it.";
 });
 $("#hq-url").addEventListener("input", () => {
@@ -938,41 +951,61 @@ $("#enroll-hq").addEventListener("click", async () => {
   };
   const sameServer = normalizeComparableUrl(serverUrl) === normalizeComparableUrl(currentHqServerUrl);
   const reEnrollment = hqEnrolled && hqReEnrollmentRequired && sameServer;
+  const relocatingHq = hqEnrolled && !hqConnected && !reEnrollment && !sameServer;
   if (hqEnrolled && sameServer && !reEnrollment) {
     toast("This endpoint is already enrolled with that HQ server.", true);
     return;
   }
-  if (hqEnrolled && !reEnrollment && !protectedSettingPreflight()) return;
-  const replacingEnrollment = hqEnrolled && !reEnrollment;
+  if (hqEnrolled && !reEnrollment && !relocatingHq && !protectedSettingPreflight()) return;
+  const replacingEnrollment = hqEnrolled && !reEnrollment && !relocatingHq;
   let requestCompleted = false;
   button.disabled = true;
-  button.textContent = replacingEnrollment ? "Submitting server change…" : reEnrollment ? "Requesting re-enrollment…" : "Requesting approval…";
+  button.textContent = replacingEnrollment
+    ? "Submitting server change…"
+    : reEnrollment
+      ? "Requesting re-enrollment…"
+      : relocatingHq
+        ? "Verifying moved HQ…"
+        : "Requesting approval…";
   $("#hq-form-state").textContent = replacingEnrollment
     ? "The current HQ is validating the maintenance password before this endpoint changes server."
     : reEnrollment
       ? "Contacting the same pinned HQ and requesting a fresh device credential."
+      : relocatingHq
+        ? "Verifying the pinned HQ certificate and existing device credential at the discovered address."
       : "Contacting the selected HQ and submitting this endpoint for approval.";
   try {
-    const status = await api("/api/hq/request", {
-      method: "POST",
-      body: JSON.stringify({
-        serverUrl: serverUrl || undefined,
-        fingerprint256: fingerprint256 || undefined,
-        reEnroll: reEnrollment,
-        maintenancePassword: replacingEnrollment ? maintenancePassword() : undefined
-      })
-    });
+    const status = relocatingHq
+      ? await api("/api/hq/relocate", {
+          method: "POST",
+          body: JSON.stringify({ serverUrl })
+        })
+      : await api("/api/hq/request", {
+          method: "POST",
+          body: JSON.stringify({
+            serverUrl: serverUrl || undefined,
+            fingerprint256: fingerprint256 || undefined,
+            reEnroll: reEnrollment,
+            maintenancePassword: replacingEnrollment ? maintenancePassword() : undefined
+          })
+        });
     if (replacingEnrollment) clearMaintenancePassword();
     renderHq(status);
     requestCompleted = true;
-    toast(`Approval requested from ${status.hqName}`);
+    toast(relocatingHq
+      ? `Reconnected to ${status.hqName} at its new address`
+      : `Approval requested from ${status.hqName}`);
   } catch (error) {
     $("#hq-form-state").textContent = error.message;
     toast(error.message, true);
   } finally {
     button.disabled = false;
     if (!requestCompleted) {
-      button.textContent = replacingEnrollment ? "Submit server change" : "Save server and request approval";
+      button.textContent = replacingEnrollment
+        ? "Submit server change"
+        : relocatingHq
+          ? "Reconnect to moved HQ"
+          : "Save server and request approval";
     }
   }
 });

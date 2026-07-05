@@ -57,7 +57,7 @@ publish the signed Setup executable from an elevated HQ PowerShell session:
 
 ```powershell
 .\Publish-SentryLoomUpdate.ps1 `
-  -SetupFile C:\Releases\SentryLoom-Setup-0.16.8.exe `
+  -SetupFile C:\Releases\SentryLoom-Setup-0.16.9.exe `
   -ReleaseNotes 'Security engine and stability update'
 ```
 
@@ -114,7 +114,7 @@ forward them.
 
 ## Initialize on the HQ Windows server
 
-Run `SentryLoom-HQ-Setup-0.4.4.exe` and provide the server's DNS/computer name.
+Run `SentryLoom-HQ-Setup-0.4.5.exe` and provide the server's DNS/computer name.
 Setup installs prerequisites, initializes new servers, preserves existing data
 during upgrades, registers the self-restarting startup task, and asks for the
 administrator password with confirmation. On upgrade, the entered password

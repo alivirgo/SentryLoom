@@ -375,7 +375,11 @@ test("HQ enrolls, authenticates telemetry, and delivers allowlisted commands", a
     });
     assert.equal(telemetryResponse.status, 202);
     const telemetryAcknowledgement = await telemetryResponse.json();
-    assert.equal(telemetryAcknowledgement.hq.version, "0.4.4");
+    assert.equal(telemetryAcknowledgement.hq.version, "0.4.5");
+    assert.equal(
+      telemetryAcknowledgement.hq.capabilities.includes("hq-address-relocation-v1"),
+      true
+    );
     assert.equal(
       telemetryAcknowledgement.hq.capabilities.includes("maintenance-authorization-v1"),
       true

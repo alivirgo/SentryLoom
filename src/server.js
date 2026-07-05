@@ -188,6 +188,22 @@ export function createDashboardServer(engine, options = {}) {
               }));
           return;
         }
+        if (request.method === "POST" && url.pathname === "/api/hq/relocate") {
+          const body = await bodyJson(request);
+          if (typeof body.serverUrl !== "string" || !body.serverUrl.trim()) {
+            json(response, 400, { error: "The discovered HQ URL is required" });
+            return;
+          }
+          const allowHttp = process.env.SENTRYLOOM_ALLOW_INSECURE_HQ === "1";
+          const serverUrl = normalizeHqUrl(body.serverUrl, { allowHttp });
+          const current = await engine.getHqStatus();
+          if (!current.enrolled) {
+            json(response, 409, { error: "Only an enrolled endpoint can recover a moved HQ address" });
+            return;
+          }
+          json(response, 200, await engine.relocateHq(serverUrl));
+          return;
+        }
         if (request.method === "POST" && url.pathname === "/api/hq/maintenance/request") {
           const body = await bodyJson(request);
           json(response, 200, await engine.requestMaintenancePassword({

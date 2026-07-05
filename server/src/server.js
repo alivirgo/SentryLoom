@@ -15,10 +15,11 @@ import { ThreatGateway } from "./threat-gateway.js";
 const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 const publicDirectory = path.resolve(moduleDirectory, "..", "public");
 const DISCOVERY_REQUEST = "SENTRYLOOM_HQ_DISCOVER_V1";
-const HQ_VERSION = "0.4.4";
+const HQ_VERSION = "0.4.5";
 const DEFAULT_UPDATE_STAGING = "Z:\\Extreme Control\\SentryLoom Updates";
 const HQ_CAPABILITIES = Object.freeze([
   "verified-enrollment-v1",
+  "hq-address-relocation-v1",
   "maintenance-authorization-v1",
   "maintenance-request-v1",
   "threat-intelligence-gateway-v1"
@@ -460,6 +461,15 @@ export async function createHqServer(config, options = {}) {
         const device = clientSession(request);
         if (!device) {
           sendJson(response, 401, { error: "Device authentication failed" });
+          return;
+        }
+        if (request.method === "GET" && url.pathname === "/api/v1/device/session") {
+          sendJson(response, 200, {
+            protocol: "sentryloom-hq/1",
+            hqName: config.hqName,
+            deviceId: device.id,
+            authenticated: true
+          });
           return;
         }
         if (request.method === "POST" && url.pathname === "/api/v1/device/telemetry") {

@@ -1,5 +1,5 @@
 #define MyAppName "SentryLoom HQ"
-#define MyAppVersion "0.4.4"
+#define MyAppVersion "0.4.5"
 #define MyAppPublisher "NUC7 Studios"
 
 [Setup]

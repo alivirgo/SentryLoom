@@ -476,6 +476,44 @@ export async function requestHqEnrollment(options = {}) {
   return pending;
 }
 
+export async function relocateHq(credentials, options = {}) {
+  if (!credentials) throw new Error("This endpoint is not enrolled with SentryLoom HQ");
+  const allowHttp = Boolean(
+    options.allowHttp || process.env.SENTRYLOOM_ALLOW_INSECURE_HQ === "1"
+  );
+  const serverUrl = normalizeHqUrl(options.serverUrl, { allowHttp });
+  const fingerprint256 = normalizeFingerprint(credentials.fingerprint256);
+  if (!fingerprint256 && !allowHttp) {
+    throw new Error("The existing HQ certificate fingerprint is missing");
+  }
+  const identity = await probeHq(serverUrl, {
+    fingerprint256,
+    allowHttp
+  });
+  const relocatedCredentials = {
+    ...credentials,
+    serverUrl,
+    fingerprint256: identity.fingerprint256 || fingerprint256,
+    hqName: identity.hqName || credentials.hqName
+  };
+  try {
+    await hqRequest(serverUrl, "/api/v1/device/session", {
+      credentials: relocatedCredentials,
+      fingerprint256: relocatedCredentials.fingerprint256,
+      allowHttp
+    });
+  } catch (error) {
+    // HQ versions before the relocation endpoint authenticate the device
+    // before returning this exact route error. This preserves safe recovery
+    // for an unchanged HQ whose address moved before either side was updated.
+    if (error.message !== "Device API route not found") throw error;
+  }
+  await saveHqCredentials(relocatedCredentials);
+  await clearPendingHqEnrollment();
+  await fs.rm(appPaths().hqConnectorState, { force: true });
+  return relocatedCredentials;
+}
+
 export async function pollHqEnrollment(pending) {
   const allowHttp = process.env.SENTRYLOOM_ALLOW_INSECURE_HQ === "1";
   const response = await hqRequest(

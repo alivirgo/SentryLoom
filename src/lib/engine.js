@@ -47,6 +47,7 @@ import {
   enrollWithHq,
   HqEnrollmentPoller,
   HqConnector,
+  relocateHq as relocateHqCredentials,
   requestHqEnrollment,
   requestHqMaintenancePassword
 } from "./hq-client.js";
@@ -679,6 +680,29 @@ export class AntivirusEngine {
       serverUrl: credentials.serverUrl,
       fingerprint256: credentials.fingerprint256
     });
+  }
+
+  async relocateHq(serverUrl) {
+    const credentials = await loadHqCredentials();
+    if (!credentials) {
+      throw new Error("The pinned HQ credential needed for address recovery is missing");
+    }
+    await this.stopManagement();
+    try {
+      const relocated = await relocateHqCredentials(credentials, { serverUrl });
+      await appendAudit("hq.address-relocated", {
+        hqName: relocated.hqName,
+        previousServerUrl: credentials.serverUrl,
+        serverUrl: relocated.serverUrl,
+        deviceId: relocated.deviceId,
+        fingerprint256: relocated.fingerprint256
+      });
+      await this.startManagement();
+      return this.getHqStatus();
+    } catch (error) {
+      await this.startManagement().catch(() => {});
+      throw error;
+    }
   }
 
   async disconnectHq() {

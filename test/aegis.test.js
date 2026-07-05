@@ -52,6 +52,7 @@ const {
   HqConnector,
   pollHqEnrollment,
   probeHq,
+  relocateHq,
   requestHqEnrollment
 } = await import("../src/lib/hq-client.js");
 const {
@@ -345,7 +346,7 @@ test("client upgrades preserve stored settings and record a versioned migration"
   assert.deepEqual(config.scanner.exclusions, ["C:\\Preserve-Me"]);
   const migration = JSON.parse(await fs.readFile(path.join(data, "upgrade-state.json"), "utf8"));
   assert.equal(migration.previousVersion, "0.16.1");
-  assert.equal(migration.currentVersion, "0.16.8");
+  assert.equal(migration.currentVersion, "0.16.9");
   const backups = await fs.readdir(path.join(data, "upgrade-backups"));
   assert.equal(backups.some((name) => name.startsWith("config-0.16.1-")), true);
 });
@@ -694,7 +695,7 @@ test("managed client replaces a preserved HQ target, encrypts enrollment, and ex
     store.reviewEnrollmentRequest(pending.requestId, true, pending.verificationCode);
     const approval = await pollHqEnrollment(pending);
     assert.equal(approval.status, "approved");
-    const credentials = approval.credentials;
+    let credentials = approval.credentials;
     assert.equal((await loadHqCredentials()).deviceId, credentials.deviceId);
     const encrypted = await fs.readFile(path.join(
       process.env.SENTRYLOOM_DATA_DIR,
@@ -702,6 +703,24 @@ test("managed client replaces a preserved HQ target, encrypts enrollment, and ex
       "hq-credentials.enc"
     ));
     assert.equal(encrypted.includes(Buffer.from(credentials.token)), false);
+
+    credentials = await relocateHq(credentials, {
+      serverUrl: `http://localhost:${address.port}`,
+      allowHttp: true
+    });
+    assert.equal(credentials.serverUrl, `http://localhost:${address.port}`);
+    assert.equal((await loadHqCredentials()).serverUrl, credentials.serverUrl);
+    await assert.rejects(
+      relocateHq({
+        ...credentials,
+        token: crypto.randomBytes(32).toString("base64url")
+      }, {
+        serverUrl: `http://127.0.0.1:${address.port}`,
+        allowHttp: true
+      }),
+      /Device authentication failed/
+    );
+    assert.equal((await loadHqCredentials()).serverUrl, credentials.serverUrl);
 
     store.createCommand(credentials.deviceId, "scan.quick", {});
     let executed = 0;
@@ -717,7 +736,7 @@ test("managed client replaces a preserved HQ target, encrypts enrollment, and ex
     connector.running = true;
     await connector.pulse();
     assert.equal(connector.status().enrolled, true);
-    assert.equal(connector.status().hqVersion, "0.4.4");
+    assert.equal(connector.status().hqVersion, "0.4.5");
     assert.equal(connector.status().maintenanceAuthorizationSupported, true);
     assert.equal(connector.status().abuseChGatewayConfigured, false);
     for (let attempt = 0; attempt < 20 &&
@@ -1036,6 +1055,10 @@ test("managed HQ server changes require maintenance authorization", async () => 
     async disconnectHq() {
       calls.push({ type: "disconnect" });
       return { enrolled: false, pending: false };
+    },
+    async relocateHq(serverUrl) {
+      calls.push({ type: "relocate", serverUrl });
+      return { enrolled: true, connected: true, serverUrl };
     }
   };
   const dashboard = createDashboardServer(engine);
@@ -1134,6 +1157,27 @@ test("managed HQ server changes require maintenance authorization", async () => 
     });
     assert.equal(cancelledPending.status, 200);
     assert.deepEqual(calls, [{ type: "disconnect" }]);
+
+    calls.length = 0;
+    hqStatus = {
+      enrolled: true,
+      connected: false,
+      serverUrl: "https://old-hq:8443"
+    };
+    const relocated = await fetch(`${origin}/api/hq/relocate`, {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        "Content-Type": "application/json",
+        "X-SentryLoom-CSRF": csrf
+      },
+      body: JSON.stringify({ serverUrl: "https://moved-hq:8443" })
+    });
+    assert.equal(relocated.status, 200);
+    assert.deepEqual(calls, [{
+      type: "relocate",
+      serverUrl: "https://moved-hq:8443"
+    }]);
   } finally {
     await dashboard.close();
   }

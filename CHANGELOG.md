@@ -4,6 +4,24 @@ All notable changes to SentryLoom will be documented here.
 
 The project uses semantic versioning where practical.
 
+## [0.16.9] - 2026-07-05
+
+SentryLoom Endpoint Security v0.16.9 ships with SentryLoom HQ v0.4.5.
+
+### Verified enrollment and moved-HQ recovery
+
+- Added client-generated six-digit enrollment verification without disclosing
+  the code in the initial request. The client validates the administrator's
+  proof before accepting its HQ credential.
+- Added selectable LAN discovery and automatic verified re-enrollment after
+  the HQ revokes or loses a device credential.
+- Added safe address recovery when an enrolled HQ moves to another IP. The
+  client accepts the new URL only when the pinned TLS certificate and existing
+  device token both authenticate there.
+- Released terminal enrollment leases after rejection or a wrong code so a
+  corrected request can proceed without restarting background protection.
+- Restored cancellation to standalone mode while approval is still pending.
+
 ## [0.16.8] - 2026-07-05
 
 SentryLoom Endpoint Security v0.16.8 ships with SentryLoom HQ v0.4.4.
