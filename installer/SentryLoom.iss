@@ -89,6 +89,22 @@ begin
     Result := 'winget.exe';
 end;
 
+function JsonStringValue(const Json, Key: String): String;
+var
+  Marker, Remaining: String;
+  StartAt, EndAt: Integer;
+begin
+  Result := '';
+  Marker := '"' + Key + '":"';
+  StartAt := Pos(Marker, Json);
+  if StartAt = 0 then
+    Exit;
+  Remaining := Copy(Json, StartAt + Length(Marker), Length(Json));
+  EndAt := Pos('"', Remaining);
+  if EndAt > 0 then
+    Result := Copy(Remaining, 1, EndAt - 1);
+end;
+
 function InitializeUninstall(): Boolean;
 var
   ResultCode: Integer;
@@ -251,7 +267,7 @@ begin
     Details := '';
     DetailsAnsi := '';
     if FileExists(FailureLog) and LoadStringFromFile(FailureLog, DetailsAnsi) then
-      Details := String(DetailsAnsi);
+      Details := DetailsAnsi;
     if Details = '' then
       Details := 'No diagnostic details were produced.';
     Result :=
@@ -307,6 +323,10 @@ var
   ResultCode: Integer;
   FailureLog, ResultFile, Details, RequestResult: String;
   DetailsAnsi, RequestResultAnsi: AnsiString;
+  VerificationCode, PollResultFile, PollResult: String;
+  PollResultAnsi: AnsiString;
+  Ans: Integer;
+  Approved: Boolean;
 begin
   if DeploymentPage.SelectedValueIndex <> 1 then
   begin
@@ -333,7 +353,7 @@ begin
       Details := '';
       DetailsAnsi := '';
       if FileExists(FailureLog) and LoadStringFromFile(FailureLog, DetailsAnsi) then
-        Details := Trim(String(DetailsAnsi));
+        Details := Trim(DetailsAnsi);
       if Details = '' then
         Details := 'Setup could not submit the HQ approval request.';
       SetupWarnings := SetupWarnings +
@@ -346,17 +366,78 @@ begin
       RequestResult := '';
       RequestResultAnsi := '';
       if FileExists(ResultFile) and LoadStringFromFile(ResultFile, RequestResultAnsi) then
-        RequestResult := String(RequestResultAnsi);
+        RequestResult := RequestResultAnsi;
       if Pos('"status":"preserved"', RequestResult) > 0 then
       begin
         InstallDetail('The existing approved HQ enrollment and device identity were preserved.');
       end
       else
       begin
+        VerificationCode := JsonStringValue(RequestResult, 'verificationCode');
+        if Length(VerificationCode) <> 6 then
+          RaiseException('Setup did not receive a valid client-generated verification code.');
         InstallDetail('HQ was found and the endpoint approval request was submitted.');
         InstallDetail('The selected HQ is now the active enrollment target; any previous server credential was retired.');
+
+        PollResultFile := ExpandConstant('{tmp}\SentryLoom-HQ-Poll-Result.json');
+        SetEnvironmentVariable('SENTRYLOOM_HQ_RESULT_FILE', PollResultFile);
+        Approved := False;
+        while not Approved do
+        begin
+          DeleteFile(PollResultFile);
+          InstallDetail('Polling SentryLoom HQ for enrollment approval…');
+          if (not RunHidden(
+            GetNodePath,
+            '--disable-warning=ExperimentalWarning "' + ExpandConstant('{app}\src\cli.js') + '" hq poll-pending-env',
+            ExpandConstant('{app}'),
+            ResultCode)) or (ResultCode <> 0) then
+          begin
+            Details := '';
+            DetailsAnsi := '';
+            if FileExists(FailureLog) and LoadStringFromFile(FailureLog, DetailsAnsi) then
+              Details := Trim(DetailsAnsi);
+            if Details = '' then
+              Details := 'No diagnostic details were produced.';
+            RaiseException(
+              'Polling pending enrollment failed.' + #13#10 + #13#10 +
+              Details + #13#10 + #13#10 + 'Exit code: ' + IntToStr(ResultCode));
+          end;
+
+          PollResult := '';
+          PollResultAnsi := '';
+          if FileExists(PollResultFile) and LoadStringFromFile(PollResultFile, PollResultAnsi) then
+            PollResult := PollResultAnsi;
+
+          if Pos('"status":"approved"', PollResult) > 0 then
+          begin
+            Approved := True;
+            InstallDetail('Enrollment request approved by the HQ server.');
+          end
+          else if Pos('"status":"rejected"', PollResult) > 0 then
+          begin
+            MsgBox('The SentryLoom HQ server rejected the enrollment request.', mbError, MB_OK);
+            RaiseException('Enrollment request was rejected by SentryLoom HQ.');
+          end;
+
+          if not Approved then
+          begin
+            Ans := MsgBox(
+              'This client is waiting for administrator approval on the SentryLoom HQ server.' + #13#10 + #13#10 +
+              'Verification Code: ' + VerificationCode + #13#10 + #13#10 +
+              'Please approve this device in the SentryLoom HQ console by entering the verification code above.' + #13#10 + #13#10 +
+              'Once approved, click Retry to complete the installation. Click Cancel to abort setup.',
+              mbConfirmation,
+              MB_RETRYCANCEL
+            );
+            if Ans = IDCANCEL then
+            begin
+              RaiseException('Setup aborted by user during server enrollment approval.');
+            end;
+          end;
+        end;
+
         SetupWarnings := SetupWarnings +
-          'This endpoint is waiting for approval in the SentryLoom HQ console. Local protection is already active.' + #13#10;
+          'This endpoint was approved by SentryLoom HQ. Local protection is active.' + #13#10;
       end;
     end;
   finally
@@ -376,6 +457,7 @@ var
 begin
   InstallDetail('Registering elevated realtime protection and scheduled scanning tasks.');
   InstallDetail('Creating application-scoped Windows Firewall rules for HQ discovery and HTTPS.');
+  FailureLog := ExpandConstant('{tmp}\SentryLoom-Register-Error.txt');
   if (not RunHidden(
     GetPowerShellPath(''),
     '-NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "' +
@@ -384,14 +466,10 @@ begin
     ExpandConstant('{app}'),
     ResultCode)) or (ResultCode <> 0) then
   begin
-    FailureLog := ExpandConstant('{tmp}\SentryLoom-Register-Error.txt');
     Details := '';
-    if FileExists(FailureLog) then
-    begin
-      DetailsAnsi := '';
-      if LoadStringFromFile(FailureLog, DetailsAnsi) then
-        Details := String(DetailsAnsi);
-    end;
+    DetailsAnsi := '';
+    if FileExists(FailureLog) and LoadStringFromFile(FailureLog, DetailsAnsi) then
+      Details := DetailsAnsi;
     if Details = '' then
       Details := 'No diagnostic details were produced.';
     RaiseException(

@@ -75,10 +75,16 @@ export async function savePendingHqEnrollment(pending) {
     requestId: String(pending.requestId),
     requestSecret: String(pending.requestSecret),
     requestedAt: String(pending.requestedAt || new Date().toISOString()),
-    status: String(pending.status || "pending")
+    status: String(pending.status || "pending"),
+    verificationCode: String(pending.verificationCode || ""),
+    verificationChallenge: String(pending.verificationChallenge || "")
   };
   if (!/^[a-f0-9-]{36}$/i.test(clean.requestId) || clean.requestSecret.length < 40) {
     throw new Error("Pending HQ enrollment credentials are invalid");
+  }
+  if (!/^\d{6}$/.test(clean.verificationCode) ||
+      !/^[A-Za-z0-9_-]{43}$/.test(clean.verificationChallenge)) {
+    throw new Error("Pending HQ enrollment verification data is invalid");
   }
   await encryptStore(appPaths().hqPendingEnrollment, PENDING_MAGIC, clean);
 }

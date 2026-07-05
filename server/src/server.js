@@ -18,6 +18,7 @@ const DISCOVERY_REQUEST = "SENTRYLOOM_HQ_DISCOVER_V1";
 const HQ_VERSION = "0.4.4";
 const DEFAULT_UPDATE_STAGING = "Z:\\Extreme Control\\SentryLoom Updates";
 const HQ_CAPABILITIES = Object.freeze([
+  "verified-enrollment-v1",
   "maintenance-authorization-v1",
   "maintenance-request-v1",
   "threat-intelligence-gateway-v1"
@@ -169,7 +170,7 @@ export function publicHqSettings(config) {
   };
 }
 
-function validateDevice(body) {
+function validateDevice(body, options = {}) {
   const device = body?.device || {};
   if (!/^[a-f0-9-]{36}$/i.test(String(device.installationId || ""))) {
     throw new Error("A valid installation identifier is required");
@@ -179,13 +180,20 @@ function validateDevice(body) {
       throw new Error(`Device ${field} is invalid`);
     }
   }
-  return {
+  const validated = {
     installationId: String(device.installationId),
     name: String(device.name).trim(),
     hostname: String(device.hostname).trim(),
     platform: String(device.platform).trim(),
     appVersion: String(device.appVersion).trim()
   };
+  if (options.requireVerification) {
+    validated.verificationChallenge = String(body.verificationChallenge || "").trim();
+    if (!/^[A-Za-z0-9_-]{43}$/.test(validated.verificationChallenge)) {
+      throw new Error("Enrollment verification challenge is invalid");
+    }
+  }
+  return validated;
 }
 
 function alertMessage(event) {
@@ -409,7 +417,10 @@ export async function createHqServer(config, options = {}) {
           return;
         }
         const body = await readJson(request);
-        const pending = store.createEnrollmentRequest(validateDevice(body), address);
+        const pending = store.createEnrollmentRequest(
+          validateDevice(body, { requireVerification: true }),
+          address
+        );
         enrollmentRequestAttempts.set(address, {
           count: Date.now() - prior.since > 60 * 60 * 1000 ? 1 : prior.count + 1,
           since: Date.now() - prior.since > 60 * 60 * 1000 ? Date.now() : prior.since
@@ -846,7 +857,12 @@ export async function createHqServer(config, options = {}) {
           /^\/api\/admin\/enrollment-requests\/([a-f0-9-]{36})\/(approve|reject)$/i
         );
         if (request.method === "POST" && reviewMatch) {
-          const reviewed = store.reviewEnrollmentRequest(reviewMatch[1], reviewMatch[2] === "approve");
+          const body = await readJson(request);
+          const reviewed = store.reviewEnrollmentRequest(
+            reviewMatch[1],
+            reviewMatch[2] === "approve",
+            body.verificationCode
+          );
           sendJson(response, 200, {
             id: reviewed.id,
             status: reviewed.status,

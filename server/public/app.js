@@ -657,9 +657,22 @@ $("#approvals").addEventListener("click", async (event) => {
   const id = button?.dataset.approve || button?.dataset.reject;
   if (!id) return;
   const action = button.dataset.approve ? "approve" : "reject";
+  let verificationCode = "";
+  if (action === "approve") {
+    verificationCode = prompt("Enter the 6-digit verification code displayed on the client device:");
+    if (verificationCode === null) return;
+    verificationCode = verificationCode.trim();
+    if (!/^\d{6}$/.test(verificationCode)) {
+      toast("Please enter a valid 6-digit number.");
+      return;
+    }
+  }
   try {
     button.disabled = true;
-    await api(`/api/admin/enrollment-requests/${id}/${action}`, { method: "POST", body: "{}" });
+    await api(`/api/admin/enrollment-requests/${id}/${action}`, {
+      method: "POST",
+      body: JSON.stringify({ verificationCode })
+    });
     toast(`Enrollment request ${action === "approve" ? "approved" : "rejected"}`);
     await refresh();
   } catch (error) {
@@ -704,6 +717,27 @@ $("#device-dialog").addEventListener("click", async (event) => {
       toast(error.message);
     } finally {
       wakeButton.disabled = false;
+    }
+    return;
+  }
+  const reauthorizeButton = event.target.closest("[data-reauthorize]");
+  if (reauthorizeButton && selectedDeviceId) {
+    const device = devices.find((item) => item.id === selectedDeviceId);
+    if (!window.confirm(
+      `Re-enroll ${device?.name || "this endpoint"}? This revokes its current credential. The client will create a fresh request and six-digit verification code for your approval.`
+    )) return;
+    try {
+      reauthorizeButton.disabled = true;
+      await api(`/api/admin/devices/${selectedDeviceId}/revoke`, {
+        method: "POST"
+      });
+      toast(`Credential revoked. ${device?.name || "Endpoint"} will request re-enrollment.`);
+      $("#device-dialog").close();
+      await refresh();
+    } catch (error) {
+      toast(error.message);
+    } finally {
+      reauthorizeButton.disabled = false;
     }
     return;
   }

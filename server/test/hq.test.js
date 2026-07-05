@@ -270,7 +270,7 @@ test("Wake-on-LAN uses sanitized client MAC and subnet telemetry", async () => {
   ), true);
 });
 
-test("HQ UI exposes one-click staged publishing and Wake-on-LAN", async () => {
+test("HQ UI exposes staged publishing, Wake-on-LAN, and verified re-enrollment", async () => {
   const [html, app] = await Promise.all([
     fs.readFile(path.join(projectRoot, "server", "public", "index.html"), "utf8"),
     fs.readFile(path.join(projectRoot, "server", "public", "app.js"), "utf8")
@@ -278,9 +278,12 @@ test("HQ UI exposes one-click staged publishing and Wake-on-LAN", async () => {
   assert.match(html, /id="publish-staged-update"[^>]*>Publish latest and deploy/);
   assert.match(html, /id="setting-staging-directory"/);
   assert.match(html, /data-wake>Wake on LAN/);
+  assert.match(html, /data-reauthorize[^>]*>Revoke credential &amp; re-enroll/);
   assert.match(html, /id="save-server-abuse-key"/);
   assert.match(app, /\/api\/admin\/update\/publish-latest/);
   assert.match(app, /\/api\/admin\/devices\/\$\{selectedDeviceId\}\/wake/);
+  assert.match(app, /6-digit verification code displayed on the client device/);
+  assert.match(app, /\/api\/admin\/devices\/\$\{selectedDeviceId\}\/revoke/);
   assert.match(app, /\/api\/admin\/threat-credentials/);
 });
 
@@ -511,6 +514,7 @@ test("HQ enrolls, authenticates telemetry, and delivers allowlisted commands", a
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        verificationChallenge: crypto.randomBytes(32).toString("base64url"),
         device: {
           installationId: crypto.randomUUID(),
           name: "Operations-Desktop",
@@ -529,7 +533,11 @@ test("HQ enrolls, authenticates telemetry, and delivers allowlisted commands", a
     assert.equal((await pendingResponse.json()).status, "pending");
     const approvalResponse = await fetch(
       `${origin}/api/admin/enrollment-requests/${automaticRequest.requestId}/approve`,
-      { method: "POST", headers: adminHeaders, body: "{}" }
+      {
+        method: "POST",
+        headers: adminHeaders,
+        body: JSON.stringify({ verificationCode: "482913" })
+      }
     );
     assert.equal(approvalResponse.status, 200);
     const approvedResponse = await fetch(
@@ -539,11 +547,13 @@ test("HQ enrolls, authenticates telemetry, and delivers allowlisted commands", a
     const approved = await approvedResponse.json();
     assert.equal(approved.status, "approved");
     assert.ok(approved.token.length >= 40);
+    assert.match(approved.verificationProof, /^[A-Za-z0-9_-]{43}$/);
 
     const rejectedRequestResponse = await fetch(`${origin}/api/v1/enrollment-requests`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        verificationChallenge: crypto.randomBytes(32).toString("base64url"),
         device: {
           installationId: crypto.randomUUID(),
           name: "Unknown-Device",

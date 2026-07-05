@@ -167,13 +167,25 @@ export function createDashboardServer(engine, options = {}) {
             ? normalizeFingerprint(body.fingerprint256)
             : undefined;
           const current = await engine.getHqStatus();
-          if (current.enrolled) {
+          const reEnrollment = Boolean(body.reEnroll) &&
+            current.enrolled &&
+            current.reEnrollmentRequired === true &&
+            normalizeHqUrl(current.serverUrl, { allowHttp }) === serverUrl;
+          if (body.reEnroll && !reEnrollment) {
+            json(response, 409, {
+              error: "Re-enrollment is available only after the selected HQ rejects this device credential"
+            });
+            return;
+          }
+          if (current.enrolled && !reEnrollment) {
             await engine.authorizeMaintenance(body.maintenancePassword, "change-hq-server");
           }
-          json(response, 202, await engine.requestHqEnrollment({
-            serverUrl,
-            fingerprint256
-          }));
+          json(response, 202, reEnrollment
+            ? await engine.reEnrollHq()
+            : await engine.requestHqEnrollment({
+                serverUrl,
+                fingerprint256
+              }));
           return;
         }
         if (request.method === "POST" && url.pathname === "/api/hq/maintenance/request") {
@@ -186,7 +198,10 @@ export function createDashboardServer(engine, options = {}) {
         }
         if (request.method === "POST" && url.pathname === "/api/hq/disconnect") {
           const body = await bodyJson(request);
-          await engine.authorizeMaintenance(body.maintenancePassword, "disconnect-hq");
+          const current = await engine.getHqStatus();
+          if (current.enrolled) {
+            await engine.authorizeMaintenance(body.maintenancePassword, "disconnect-hq");
+          }
           json(response, 200, await engine.disconnectHq());
           return;
         }

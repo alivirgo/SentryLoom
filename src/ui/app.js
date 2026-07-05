@@ -7,6 +7,7 @@ let quarantineRequest = null;
 let discoveredHqServers = [];
 let dashboardReachable = true;
 let hqEnrolled = false;
+let hqReEnrollmentRequired = false;
 let hqMaintenanceCompatibility = "standalone";
 let currentHqServerUrl = "";
 let stagedMaintenancePassword = "";
@@ -202,36 +203,48 @@ function renderHq(status) {
   currentHqServerUrl = String(status.serverUrl || "");
   const pending = Boolean(status.pending);
   const rejected = Boolean(status.rejected);
+  const verificationFailed = Boolean(status.verificationFailed);
   const connected = status.connected === undefined
     ? Boolean(status.running && status.lastConnectedAt && !status.lastError)
     : Boolean(status.connected);
   const reconnecting = status.connectionState === "reconnecting" || status.connectionState === "connecting";
-  const state = pending ? "PENDING APPROVAL" : rejected ? "REJECTED" : enrolled
+  hqReEnrollmentRequired = Boolean(status.reEnrollmentRequired);
+  const state = pending ? "PENDING APPROVAL" : verificationFailed ? "CODE REJECTED" : rejected ? "REJECTED" : enrolled
     ? connected ? (status.delegated ? "CONNECTED · BACKGROUND" : "CONNECTED")
       : reconnecting ? "RECONNECTING" : "OFFLINE"
     : "STANDALONE";
   $("#hq-state").textContent = state;
-  $("#hq-state").classList.toggle("warning", pending || rejected || (enrolled && !connected && !status.delegated));
+  $("#hq-state").classList.toggle("warning", pending || verificationFailed || rejected || (enrolled && !connected && !status.delegated));
   $("#hq-summary").textContent = pending
-    ? `${status.hqName || "SentryLoom HQ"} · Waiting for an administrator to approve this endpoint${status.lastCheckedAt ? ` · Checked ${relativeTime(status.lastCheckedAt)}` : ""}${status.lastError ? ` · ${status.lastError}` : ""}`
-    : rejected
-      ? `${status.hqName || "SentryLoom HQ"} rejected this enrollment request. Return to standalone mode before requesting again.`
+    ? `${status.hqName || "SentryLoom HQ"} · Ask the HQ administrator to contact you for this one-time code: ${status.verificationCode || "unavailable"}${status.lastCheckedAt ? ` · Checked ${relativeTime(status.lastCheckedAt)}` : ""}${status.lastError ? ` · ${status.lastError}` : ""}`
+    : verificationFailed
+      ? status.lastError || "The HQ approval did not prove knowledge of this client's code. Submit a new request."
+      : rejected
+      ? `${status.hqName || "SentryLoom HQ"} rejected this enrollment request. Submit a new request or return to standalone mode.`
       : enrolled
     ? `${status.hqName || "SentryLoom HQ"} · ${status.serverUrl || "server unavailable"}${status.delegated ? " · Managed by the background protection agent" : ""}${status.lastConnectedAt ? ` · Last contact ${relativeTime(status.lastConnectedAt)}` : ""}${status.lastResumeAt ? ` · Resumed ${relativeTime(status.lastResumeAt)}` : ""}${status.lastError ? ` · ${status.lastError}` : ""}${status.nextRetryAt ? ` · Retry ${relativeTime(status.nextRetryAt)}` : ""}`
     : "This endpoint is locally managed and does not send telemetry to a server.";
-  $("#disconnect-hq").classList.toggle("hidden", !enrolled && !pending && !rejected);
+  $("#disconnect-hq").classList.toggle("hidden", !enrolled && !pending && !verificationFailed && !rejected);
   $("#enroll-hq").classList.remove("hidden");
   $("#enroll-hq").textContent = pending
     ? "Resubmit server request"
+    : verificationFailed
+      ? "Submit a new verified request"
     : rejected
       ? "Submit new server request"
+      : hqReEnrollmentRequired
+        ? "Re-enroll with this HQ"
       : enrolled
         ? "Submit server change"
         : "Save server and request approval";
   $("#hq-form-state").textContent = enrolled
-    ? "To move this endpoint to another HQ, enter the new server details, load a maintenance password from the current HQ, then submit the change."
+    ? hqReEnrollmentRequired
+      ? "This HQ no longer accepts the saved device credential. Re-enroll to generate a new six-digit approval code."
+      : "To move this endpoint to another HQ, enter the new server details, load a maintenance password from the current HQ, then submit the change."
     : pending
       ? "This server request is waiting for HQ administrator approval. You can edit and resubmit it."
+      : verificationFailed
+        ? "The administrator entered the wrong code, or this was not the intended HQ. Submit a new request to generate a different code."
       : rejected
         ? "The previous request was rejected. Enter the intended server and submit a new request."
         : "Enter or discover an HQ server, then submit it here.";
@@ -923,24 +936,29 @@ $("#enroll-hq").addEventListener("click", async () => {
       return value.replace(/\/$/, "").toLowerCase();
     }
   };
-  if (hqEnrolled && normalizeComparableUrl(serverUrl) === normalizeComparableUrl(currentHqServerUrl)) {
+  const sameServer = normalizeComparableUrl(serverUrl) === normalizeComparableUrl(currentHqServerUrl);
+  const reEnrollment = hqEnrolled && hqReEnrollmentRequired && sameServer;
+  if (hqEnrolled && sameServer && !reEnrollment) {
     toast("This endpoint is already enrolled with that HQ server.", true);
     return;
   }
-  if (hqEnrolled && !protectedSettingPreflight()) return;
-  const replacingEnrollment = hqEnrolled;
+  if (hqEnrolled && !reEnrollment && !protectedSettingPreflight()) return;
+  const replacingEnrollment = hqEnrolled && !reEnrollment;
   let requestCompleted = false;
   button.disabled = true;
-  button.textContent = replacingEnrollment ? "Submitting server change…" : "Requesting approval…";
+  button.textContent = replacingEnrollment ? "Submitting server change…" : reEnrollment ? "Requesting re-enrollment…" : "Requesting approval…";
   $("#hq-form-state").textContent = replacingEnrollment
     ? "The current HQ is validating the maintenance password before this endpoint changes server."
-    : "Contacting the selected HQ and submitting this endpoint for approval.";
+    : reEnrollment
+      ? "Contacting the same pinned HQ and requesting a fresh device credential."
+      : "Contacting the selected HQ and submitting this endpoint for approval.";
   try {
     const status = await api("/api/hq/request", {
       method: "POST",
       body: JSON.stringify({
         serverUrl: serverUrl || undefined,
         fingerprint256: fingerprint256 || undefined,
+        reEnroll: reEnrollment,
         maintenancePassword: replacingEnrollment ? maintenancePassword() : undefined
       })
     });

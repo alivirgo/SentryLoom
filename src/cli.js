@@ -15,9 +15,10 @@ import {
   discoverHqServers,
   normalizeHqUrl,
   probeHq,
-  requestHqEnrollment
+  requestHqEnrollment,
+  pollHqEnrollment
 } from "./lib/hq-client.js";
-import { loadHqCredentials } from "./lib/hq-credential-store.js";
+import { loadHqCredentials, loadPendingHqEnrollment } from "./lib/hq-credential-store.js";
 
 const args = process.argv.slice(2);
 const command = args.shift() || "help";
@@ -333,10 +334,24 @@ async function main() {
             status: "requested",
             hqName: pending.hqName,
             serverUrl: pending.serverUrl,
-            requestId: pending.requestId
+            requestId: pending.requestId,
+            verificationCode: pending.verificationCode
           }), { encoding: "utf8", mode: 0o600, flag: "w" });
         }
         console.log(`Enrollment approval requested from ${pending.hqName}`);
+      } else if (action === "poll-pending-env") {
+        const pending = await loadPendingHqEnrollment();
+        if (!pending) throw new Error("No pending enrollment request was found");
+        const result = await pollHqEnrollment(pending);
+        const resultFile = process.env.SENTRYLOOM_HQ_RESULT_FILE;
+        if (resultFile) {
+          fs.writeFileSync(
+            resultFile,
+            JSON.stringify({ status: result.status }),
+            { encoding: "utf8", mode: 0o600, flag: "w" }
+          );
+        }
+        console.log(JSON.stringify({ status: result.status }, null, 2));
       } else if (action === "maintenance-authorize-env") {
         const password = process.env.SENTRYLOOM_MAINTENANCE_PASSWORD;
         const maintenanceAction = process.env.SENTRYLOOM_MAINTENANCE_ACTION || "uninstall";

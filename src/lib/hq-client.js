@@ -20,6 +20,30 @@ import { ensureDirectory } from "./fs-safe.js";
 import { clearThreatCredentials } from "./credential-store.js";
 
 const DISCOVERY_REQUEST = "SENTRYLOOM_HQ_DISCOVER_V1";
+const ENROLLMENT_VERIFICATION_CONTEXT = "sentryloom-enrollment-v1";
+
+export function generateHqVerificationCode() {
+  return crypto.randomInt(0, 1_000_000).toString().padStart(6, "0");
+}
+
+function enrollmentVerificationProof(code, requestId, challenge) {
+  return crypto.createHmac("sha256", String(code))
+    .update(`${ENROLLMENT_VERIFICATION_CONTEXT}\0${requestId}\0${challenge}`, "utf8")
+    .digest("base64url");
+}
+
+function verificationProofMatches(pending, suppliedProof) {
+  if (!/^\d{6}$/.test(String(pending.verificationCode || "")) ||
+      !/^[A-Za-z0-9_-]{43}$/.test(String(pending.verificationChallenge || "")) ||
+      !/^[A-Za-z0-9_-]{43}$/.test(String(suppliedProof || ""))) return false;
+  const expected = Buffer.from(enrollmentVerificationProof(
+    pending.verificationCode,
+    pending.requestId,
+    pending.verificationChallenge
+  ));
+  const supplied = Buffer.from(String(suppliedProof));
+  return expected.length === supplied.length && crypto.timingSafeEqual(expected, supplied);
+}
 
 function ipv4ToInteger(value) {
   const octets = String(value || "").split(".").map(Number);
@@ -387,12 +411,22 @@ export async function probeHq(serverUrl, options = {}) {
   return {
     serverUrl: normalizedUrl,
     hqName: String(identityResponse.body.name || "SentryLoom HQ"),
-    fingerprint256: identityResponse.fingerprint256
+    fingerprint256: identityResponse.fingerprint256,
+    capabilities: Array.isArray(identityResponse.body.capabilities)
+      ? identityResponse.body.capabilities.map(String)
+      : []
   };
 }
 
 export async function requestHqEnrollment(options = {}) {
   const allowHttp = Boolean(options.allowHttp || process.env.SENTRYLOOM_ALLOW_INSECURE_HQ === "1");
+  const verificationCode = options.verificationCode === undefined
+    ? generateHqVerificationCode()
+    : String(options.verificationCode).trim();
+  if (!/^\d{6}$/.test(verificationCode)) {
+    throw new Error("HQ enrollment verification code must contain exactly 6 digits");
+  }
+  const verificationChallenge = crypto.randomBytes(32).toString("base64url");
   let discovered = null;
   if (!options.serverUrl) {
     const servers = await discoverHqServers(options);
@@ -406,11 +440,19 @@ export async function requestHqEnrollment(options = {}) {
     fingerprint256: fingerprint256 || undefined,
     allowHttp
   });
+  if (!identity.capabilities.includes("verified-enrollment-v1")) {
+    throw new Error(
+      "This HQ server does not support verified enrollment. Upgrade SentryLoom HQ before connecting this client."
+    );
+  }
   const response = await hqRequest(serverUrl, "/api/v1/enrollment-requests", {
     method: "POST",
     fingerprint256: identity.fingerprint256,
     allowHttp,
-    body: { device: await getDeviceIdentity() }
+    body: {
+      device: await getDeviceIdentity(),
+      verificationChallenge
+    }
   });
   const pending = {
     serverUrl,
@@ -419,7 +461,9 @@ export async function requestHqEnrollment(options = {}) {
     requestId: response.body.requestId,
     requestSecret: response.body.requestSecret,
     requestedAt: response.body.requestedAt,
-    status: "pending"
+    status: "pending",
+    verificationCode,
+    verificationChallenge
   };
   await savePendingHqEnrollment(pending);
   await clearThreatCredentials();
@@ -444,6 +488,14 @@ export async function pollHqEnrollment(pending) {
     }
   );
   if (response.body.status === "approved") {
+    if (!verificationProofMatches(pending, response.body.verificationProof)) {
+      await savePendingHqEnrollment({ ...pending, status: "verification-failed" });
+      const error = new Error(
+        "HQ approval used the wrong verification code. Submit a new enrollment request and ask the administrator to enter the new code."
+      );
+      error.code = "HQ_ENROLLMENT_VERIFICATION_FAILED";
+      throw error;
+    }
     const credentials = {
       serverUrl: pending.serverUrl,
       fingerprint256: pending.fingerprint256,
@@ -590,6 +642,7 @@ export class HqEnrollmentPoller {
   constructor(pending, options = {}) {
     this.pending = pending;
     this.onApproved = options.onApproved;
+    this.onTerminal = options.onTerminal;
     this.intervalMs = Math.max(2000, Number(options.intervalMs) || 5000);
     this.running = false;
     this.timer = null;
@@ -599,7 +652,7 @@ export class HqEnrollmentPoller {
   }
 
   start() {
-    if (this.running || this.state === "rejected") return;
+    if (this.running || ["rejected", "verification-failed"].includes(this.state)) return;
     this.running = true;
     this.schedule(0);
   }
@@ -622,8 +675,23 @@ export class HqEnrollmentPoller {
         await this.onApproved?.(result.credentials);
       } else if (result.status === "rejected") {
         this.stop();
+        await this.onTerminal?.({
+          status: "rejected",
+          message: "The HQ administrator rejected this enrollment request"
+        });
       }
     } catch (error) {
+      if (error.code === "HQ_ENROLLMENT_VERIFICATION_FAILED") {
+        this.state = "verification-failed";
+        this.lastCheckedAt = new Date().toISOString();
+        this.lastError = error.message;
+        this.stop();
+        await this.onTerminal?.({
+          status: "verification-failed",
+          message: error.message
+        });
+        return;
+      }
       this.lastError = error.message;
     }
   }
@@ -637,9 +705,12 @@ export class HqEnrollmentPoller {
   status() {
     return {
       enabled: true,
+      enrolled: false,
       running: this.running,
       pending: this.state === "pending",
       rejected: this.state === "rejected",
+      verificationFailed: this.state === "verification-failed",
+      verificationCode: this.pending.verificationCode || null,
       approvalStatus: this.state,
       hqName: this.pending.hqName,
       serverUrl: this.pending.serverUrl,
@@ -728,6 +799,7 @@ export class HqConnector {
     this.hqCapabilities = [];
     this.maintenanceAuthorizationSupported = null;
     this.abuseChGatewayConfigured = null;
+    this.authenticationRejected = false;
   }
 
   start() {
@@ -832,6 +904,22 @@ export class HqConnector {
       await this.persistState();
       return this.intervalMs;
     } catch (error) {
+      if (error.message === "Device authentication failed") {
+        this.authenticationRejected = true;
+        this.lastError = "HQ no longer accepts this device credential. Re-enrollment is required.";
+        this.lastErrorAt = new Date().toISOString();
+        this.connectionState = "reauthorization-required";
+        this.running = false;
+        this.emit({
+          type: "hq.reauthorization-required",
+          hqName: this.credentials.hqName,
+          serverUrl: this.credentials.serverUrl,
+          message: this.lastError
+        });
+        await this.persistState();
+        return this.intervalMs;
+      }
+
       this.lastError = error.message;
       this.lastErrorAt = new Date().toISOString();
       this.consecutiveFailures += 1;
@@ -917,6 +1005,7 @@ export class HqConnector {
   status() {
     return {
       enabled: true,
+      enrolled: true,
       running: this.running,
       hqName: this.credentials.hqName,
       serverUrl: this.credentials.serverUrl,
@@ -935,7 +1024,8 @@ export class HqConnector {
       hqVersion: this.hqVersion,
       hqCapabilities: this.hqCapabilities,
       maintenanceAuthorizationSupported: this.maintenanceAuthorizationSupported,
-      abuseChGatewayConfigured: this.abuseChGatewayConfigured
+      abuseChGatewayConfigured: this.abuseChGatewayConfigured,
+      reEnrollmentRequired: this.authenticationRejected
     };
   }
 }

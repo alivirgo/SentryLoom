@@ -7,6 +7,12 @@ function digest(value) {
   return crypto.createHash("sha256").update(String(value), "utf8").digest("hex");
 }
 
+function enrollmentVerificationProof(code, requestId, challenge) {
+  return crypto.createHmac("sha256", String(code))
+    .update(`sentryloom-enrollment-v1\0${requestId}\0${challenge}`, "utf8")
+    .digest("base64url");
+}
+
 function parse(value, fallback = null) {
   try {
     return value ? JSON.parse(value) : fallback;
@@ -296,25 +302,51 @@ export class HqStore {
       FROM enrollment_requests
       ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, requested_at DESC
       LIMIT 500
-    `).all().map((record) => ({
-      id: record.id,
-      installationId: record.installation_id,
-      device: parse(record.device_json, {}),
-      status: record.status,
-      requestedAt: record.requested_at,
-      reviewedAt: record.reviewed_at,
-      remoteAddress: record.remote_address,
-      deviceId: record.device_id
-    }));
+    `).all().map((record) => {
+      const storedDevice = parse(record.device_json, {});
+      const {
+        verificationChallenge,
+        verificationProof,
+        ...device
+      } = storedDevice;
+      return {
+        id: record.id,
+        installationId: record.installation_id,
+        device,
+        verificationRequired: Boolean(verificationChallenge),
+        status: record.status,
+        requestedAt: record.requested_at,
+        reviewedAt: record.reviewed_at,
+        remoteAddress: record.remote_address,
+        deviceId: record.device_id
+      };
+    });
   }
 
-  reviewEnrollmentRequest(id, approved) {
+  reviewEnrollmentRequest(id, approved, verificationCode = "") {
     const status = approved ? "approved" : "rejected";
+    const request = this.database.prepare(`
+      SELECT device_json FROM enrollment_requests WHERE id = ?
+    `).get(id);
+    if (!request) throw new Error("Pending enrollment request was not found");
+    const device = parse(request.device_json, {});
+    if (approved) {
+      const suppliedCode = String(verificationCode || "").trim();
+      if (!/^\d{6}$/.test(suppliedCode)) throw new Error("Verification code must contain exactly 6 digits");
+      if (!/^[A-Za-z0-9_-]{43}$/.test(String(device.verificationChallenge || ""))) {
+        throw new Error("Enrollment request does not support verification");
+      }
+      device.verificationProof = enrollmentVerificationProof(
+        suppliedCode,
+        id,
+        device.verificationChallenge
+      );
+    }
     const updated = this.database.prepare(`
       UPDATE enrollment_requests
-      SET status = ?, reviewed_at = ?
+      SET status = ?, reviewed_at = ?, device_json = ?
       WHERE id = ? AND status = 'pending'
-    `).run(status, new Date().toISOString(), id);
+    `).run(status, new Date().toISOString(), JSON.stringify(device), id);
     if (!updated.changes) throw new Error("Pending enrollment request was not found");
     return this.database.prepare(`
       SELECT id, installation_id, device_json, status, requested_at,
@@ -333,7 +365,8 @@ export class HqStore {
       status: "approved",
       deviceId: enrollment.id,
       token: enrollment.token,
-      enrolledAt: enrollment.enrolledAt
+      enrolledAt: enrollment.enrolledAt,
+      verificationProof: request.device.verificationProof
     };
   }
 

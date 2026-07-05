@@ -119,6 +119,7 @@ export class AntivirusEngine {
     this.hqLeaseRelease = null;
     this.hqDelegated = false;
     this.hqManagementRetryTimer = null;
+    this.hqReEnrollmentPromise = null;
     this.hqControlTelemetry = null;
   }
 
@@ -205,7 +206,7 @@ export class AntivirusEngine {
     if (credentials) {
       this.activateHqConnector(credentials);
     } else {
-      this.hqEnrollmentPoller = new HqEnrollmentPoller(pending, {
+      const poller = new HqEnrollmentPoller(pending, {
         onApproved: async (approvedCredentials) => {
           this.hqEnrollmentPoller = null;
           this.activateHqConnector(approvedCredentials);
@@ -214,9 +215,29 @@ export class AntivirusEngine {
             hqName: approvedCredentials.hqName,
             deviceId: approvedCredentials.deviceId
           });
+        },
+        onTerminal: async (result) => {
+          this.emit({
+            type: `hq.enrollment-${result.status}`,
+            hqName: pending.hqName,
+            serverUrl: pending.serverUrl,
+            message: result.message
+          });
+          try {
+            await appendAudit(`hq.enrollment-${result.status}`, {
+              hqName: pending.hqName,
+              serverUrl: pending.serverUrl,
+              requestId: pending.requestId
+            });
+          } finally {
+            if (this.hqEnrollmentPoller === poller) {
+              await this.stopManagement();
+            }
+          }
         }
       });
-      this.hqEnrollmentPoller.start();
+      this.hqEnrollmentPoller = poller;
+      poller.start();
     }
   }
 
@@ -224,10 +245,53 @@ export class AntivirusEngine {
     this.hqConnector = new HqConnector(credentials, {
       metricsProvider: () => this.getHqTelemetry(),
       commandExecutor: (command) => this.executeHqCommand(command),
-      onEvent: (event) => this.emit(event),
+      onEvent: (event) => {
+        this.emit(event);
+        if (event.type === "hq.reauthorization-required") {
+          void this.beginHqReEnrollment(credentials).catch(() => {});
+        }
+      },
       stateWriter: (state) => writeJsonAtomic(appPaths().hqConnectorState, state)
     });
     this.hqConnector.start();
+  }
+
+  beginHqReEnrollment(credentials) {
+    if (this.hqReEnrollmentPromise) return this.hqReEnrollmentPromise;
+    this.hqReEnrollmentPromise = (async () => {
+      await this.stopManagement();
+      try {
+        const pending = await requestHqEnrollment({
+          serverUrl: credentials.serverUrl,
+          fingerprint256: credentials.fingerprint256
+        });
+        await appendAudit("hq.reenrollment-requested", {
+          hqName: pending.hqName,
+          serverUrl: pending.serverUrl,
+          requestId: pending.requestId,
+          reason: "saved device credential was rejected"
+        });
+        await this.startManagement();
+        this.emit({
+          type: "hq.reenrollment-pending",
+          hqName: pending.hqName,
+          serverUrl: pending.serverUrl,
+          message: "HQ re-enrollment is waiting for administrator approval"
+        });
+        return pending;
+      } catch (error) {
+        this.emit({
+          type: "hq.reenrollment-error",
+          hqName: credentials.hqName,
+          serverUrl: credentials.serverUrl,
+          error: error.message
+        });
+        throw error;
+      }
+    })().finally(() => {
+      this.hqReEnrollmentPromise = null;
+    });
+    return this.hqReEnrollmentPromise;
   }
 
   scheduleManagementRetry() {
@@ -530,6 +594,8 @@ export class AntivirusEngine {
       enrolled: Boolean(credentials),
       pending: pending?.status === "pending",
       rejected: pending?.status === "rejected",
+      verificationFailed: pending?.status === "verification-failed",
+      verificationCode: pending?.verificationCode || null,
       approvalStatus: pending?.status || null,
       hqName: credentials?.hqName || pending?.hqName || null,
       serverUrl: credentials?.serverUrl || pending?.serverUrl || null,
@@ -557,7 +623,10 @@ export class AntivirusEngine {
         ? delegatedState.maintenanceAuthorizationSupported === true
           ? true
           : delegatedState.maintenanceAuthorizationSupported === false ? false : null
-        : null
+        : null,
+      reEnrollmentRequired: Boolean(
+        delegatedStateFresh && delegatedState.reEnrollmentRequired
+      )
     };
   }
 
@@ -599,6 +668,17 @@ export class AntivirusEngine {
       await this.startManagement().catch(() => {});
       throw error;
     }
+  }
+
+  async reEnrollHq() {
+    const credentials = await loadHqCredentials();
+    if (!credentials) {
+      throw new Error("The pinned HQ credential needed for re-enrollment is missing");
+    }
+    return this.requestHqEnrollment({
+      serverUrl: credentials.serverUrl,
+      fingerprint256: credentials.fingerprint256
+    });
   }
 
   async disconnectHq() {

@@ -56,7 +56,8 @@ const {
 } = await import("../src/lib/hq-client.js");
 const {
   loadHqCredentials,
-  saveHqCredentials
+  saveHqCredentials,
+  loadPendingHqEnrollment
 } = await import("../src/lib/hq-credential-store.js");
 
 test("Windows endpoint processes default to one machine-wide data directory", {
@@ -113,6 +114,9 @@ test("Windows setup protects installed files behind bounded maintenance authoriz
   assert.match(installer, /Set-SentryLoomTamperProtection\.ps1/);
   assert.match(installer, /InstalledAuthorizer[\s\S]+-Action file-maintenance/);
   assert.match(authorizationScript, /Identity\.User\.Value -eq 'S-1-5-18'/);
+  assert.match(installer, /JsonStringValue\(RequestResult, 'verificationCode'\)/);
+  assert.match(installer, /hq poll-pending-env/);
+  assert.doesNotMatch(installer, /SENTRYLOOM_HQ_VERIFICATION_CODE/);
 });
 
 test("resident protection starts HQ management without opening the client UI", async () => {
@@ -651,10 +655,17 @@ test("managed client replaces a preserved HQ target, encrypts enrollment, and ex
     await saveThreatCredentials({ abuseChAuthKey: "legacy-local-auth-key-123456" });
     const identity = await probeHq(`http://127.0.0.1:${address.port}`, { allowHttp: true });
     assert.equal(identity.hqName, "Test HQ");
-    const pending = await requestHqEnrollment({
+    let pending = await requestHqEnrollment({
       serverUrl: `http://127.0.0.1:${address.port}`,
       allowHttp: true
     });
+    assert.match(pending.verificationCode, /^\d{6}$/);
+    const listedRequest = store.listEnrollmentRequests()
+      .find((item) => item.id === pending.requestId);
+    assert.equal(listedRequest.device.verificationCode, undefined);
+    assert.equal(listedRequest.device.verificationChallenge, undefined);
+    assert.equal(listedRequest.device.verificationProof, undefined);
+    assert.equal(listedRequest.verificationRequired, true);
     assert.equal(
       await loadHqCredentials(),
       null,
@@ -669,7 +680,18 @@ test("managed client replaces a preserved HQ target, encrypts enrollment, and ex
     await assert.rejects(fs.stat(oldConnectorState), { code: "ENOENT" });
     const request = store.listEnrollmentRequests().find((item) => item.id === pending.requestId);
     assert.equal(request.status, "pending");
-    store.reviewEnrollmentRequest(pending.requestId, true);
+    store.reviewEnrollmentRequest(pending.requestId, true, "000000" === pending.verificationCode ? "000001" : "000000");
+    await assert.rejects(
+      pollHqEnrollment(pending),
+      /wrong verification code/
+    );
+    assert.equal(await loadHqCredentials(), null);
+
+    pending = await requestHqEnrollment({
+      serverUrl: `http://127.0.0.1:${address.port}`,
+      allowHttp: true
+    });
+    store.reviewEnrollmentRequest(pending.requestId, true, pending.verificationCode);
     const approval = await pollHqEnrollment(pending);
     assert.equal(approval.status, "approved");
     const credentials = approval.credentials;
@@ -694,6 +716,7 @@ test("managed client replaces a preserved HQ target, encrypts enrollment, and ex
     });
     connector.running = true;
     await connector.pulse();
+    assert.equal(connector.status().enrolled, true);
     assert.equal(connector.status().hqVersion, "0.4.4");
     assert.equal(connector.status().maintenanceAuthorizationSupported, true);
     assert.equal(connector.status().abuseChGatewayConfigured, false);
@@ -721,6 +744,62 @@ test("only one local process lease can own the HQ connector", async () => {
   const reacquired = await acquireHqConnectorLease();
   assert.equal(typeof reacquired, "function");
   await reacquired();
+});
+
+test("terminal enrollment failures release the background management lease", async () => {
+  const root = await sandbox("hq-terminal-lease");
+  process.env.SENTRYLOOM_ALLOW_INSECURE_HQ = "1";
+  const databasePath = path.join(root, "hq.sqlite");
+  const store = await new HqStore(databasePath).open();
+  const hq = await createHqServer({
+    hqName: "Terminal Test HQ",
+    host: "127.0.0.1",
+    port: 0,
+    databasePath,
+    tls: { fingerprint256: "" },
+    admin: {
+      salt: Buffer.alloc(16).toString("base64"),
+      iterations: 1000,
+      passwordHash: Buffer.alloc(32).toString("base64"),
+      sessionHours: 12,
+      maxLoginAttempts: 10
+    },
+    discovery: { enabled: false, port: 32110 },
+    telemetryRetentionDays: 30,
+    alerts: { offlineAfterSeconds: 60 },
+    maintenance: { defaultMinutes: 10, defaultUses: 1 },
+    updates: {}
+  }, { store, httpOnly: true });
+  const address = await hq.listen("127.0.0.1", 0);
+  try {
+    const pending = await requestHqEnrollment({
+      serverUrl: `http://127.0.0.1:${address.port}`,
+      allowHttp: true,
+      verificationCode: "123456"
+    });
+    store.reviewEnrollmentRequest(pending.requestId, true, "654321");
+
+    const engine = await new AntivirusEngine().initialize();
+    await engine.updateConfig({ management: { enabled: true } });
+    await engine.startManagement();
+    assert.ok(engine.hqLeaseRelease);
+    assert.ok(engine.hqEnrollmentPoller);
+
+    engine.hqEnrollmentPoller.stop();
+    engine.hqEnrollmentPoller.running = true;
+    await engine.hqEnrollmentPoller.pulse();
+
+    assert.equal(engine.hqEnrollmentPoller, null);
+    assert.equal(engine.hqLeaseRelease, null);
+    assert.equal((await engine.getHqStatus()).verificationFailed, true);
+    assert.ok(engine.events.some((event) =>
+      event.type === "hq.enrollment-verification-failed"
+    ));
+  } finally {
+    delete process.env.SENTRYLOOM_ALLOW_INSECURE_HQ;
+    await hq.close();
+    store.close();
+  }
 });
 
 test("CLI writes sanitized setup diagnostics when HQ enrollment cannot start", async () => {
@@ -924,12 +1003,13 @@ test("dashboard requires a launch session and CSRF for writes", async () => {
 
 test("managed HQ server changes require maintenance authorization", async () => {
   const calls = [];
+  let hqStatus = { enrolled: true };
   const engine = {
     async getDashboardData() {
       return {};
     },
     async getHqStatus() {
-      return { enrolled: true };
+      return hqStatus;
     },
     async authorizeMaintenance(password, action) {
       calls.push({ type: "authorize", password, action });
@@ -944,6 +1024,18 @@ test("managed HQ server changes require maintenance authorization", async () => 
         hqName: "Replacement HQ",
         serverUrl: options.serverUrl
       };
+    },
+    async reEnrollHq() {
+      calls.push({ type: "reenroll" });
+      return {
+        pending: true,
+        hqName: "Original HQ",
+        serverUrl: "https://original-hq:8443"
+      };
+    },
+    async disconnectHq() {
+      calls.push({ type: "disconnect" });
+      return { enrolled: false, pending: false };
     }
   };
   const dashboard = createDashboardServer(engine);
@@ -959,7 +1051,11 @@ test("managed HQ server changes require maintenance authorization", async () => 
       headers: { Cookie: cookie }
     });
     const { csrf } = await bootstrapResponse.json();
-    const submit = (maintenancePassword, serverUrl = "https://replacement-hq:8443") =>
+    const submit = (
+      maintenancePassword,
+      serverUrl = "https://replacement-hq:8443",
+      reEnroll = false
+    ) =>
       fetch(`${origin}/api/hq/request`, {
       method: "POST",
       headers: {
@@ -970,6 +1066,7 @@ test("managed HQ server changes require maintenance authorization", async () => 
       body: JSON.stringify({
         serverUrl,
         fingerprint256: "A".repeat(64),
+        reEnroll,
         maintenancePassword
       })
     });
@@ -1005,6 +1102,38 @@ test("managed HQ server changes require maintenance authorization", async () => 
         }
       }
     ]);
+
+    calls.length = 0;
+    hqStatus = {
+      enrolled: true,
+      reEnrollmentRequired: true,
+      serverUrl: "https://original-hq:8443"
+    };
+    const wrongReEnrollmentTarget = await submit(
+      "",
+      "https://replacement-hq:8443",
+      true
+    );
+    assert.equal(wrongReEnrollmentTarget.status, 409);
+    assert.deepEqual(calls, []);
+
+    const reEnrollment = await submit("", "https://original-hq:8443", true);
+    assert.equal(reEnrollment.status, 202);
+    assert.deepEqual(calls, [{ type: "reenroll" }]);
+
+    calls.length = 0;
+    hqStatus = { enrolled: false, pending: true };
+    const cancelledPending = await fetch(`${origin}/api/hq/disconnect`, {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        "Content-Type": "application/json",
+        "X-SentryLoom-CSRF": csrf
+      },
+      body: "{}"
+    });
+    assert.equal(cancelledPending.status, 200);
+    assert.deepEqual(calls, [{ type: "disconnect" }]);
   } finally {
     await dashboard.close();
   }
@@ -1431,4 +1560,89 @@ test("ClamAV timeout returns a bounded scan error instead of hanging", async () 
   });
   assert.equal(result.available, true);
   assert.match(result.errors[0].error, /timed out/);
+});
+
+test("revoked clients automatically re-enroll with their pinned HQ", async () => {
+  await sandbox("hq-reauth");
+  const dbFile = path.join(process.env.SENTRYLOOM_DATA_DIR, "db", "hq-test-reauth.db");
+  await fs.mkdir(path.dirname(dbFile), { recursive: true }).catch(() => {});
+  const store = await new HqStore(dbFile).open();
+  const config = {
+    hqName: "Test HQ",
+    host: "127.0.0.1",
+    port: 0,
+    databasePath: dbFile,
+    tls: { fingerprint256: "" },
+    admin: {
+      salt: Buffer.alloc(16).toString("base64"),
+      iterations: 1000,
+      passwordHash: Buffer.alloc(32).toString("base64"),
+      sessionHours: 12,
+      maxLoginAttempts: 10
+    },
+    discovery: { enabled: false, port: 32110 },
+    telemetryRetentionDays: 30,
+    alerts: { offlineAfterSeconds: 60 },
+    maintenance: { defaultMinutes: 10, defaultUses: 1 },
+    updates: {}
+  };
+  const hq = await createHqServer(config, { store, httpOnly: true });
+  const address = await hq.listen("127.0.0.1", 0);
+  process.env.SENTRYLOOM_ALLOW_INSECURE_HQ = "1";
+
+  try {
+    const pending = await requestHqEnrollment({
+      serverUrl: `http://127.0.0.1:${address.port}`,
+      allowHttp: true,
+      verificationCode: "123456"
+    });
+
+    store.reviewEnrollmentRequest(pending.requestId, true, "123456");
+    const approval = await pollHqEnrollment(pending);
+    const credentials = approval.credentials;
+
+    const engine = await new AntivirusEngine().initialize();
+    await engine.updateConfig({ management: { enabled: true } });
+    engine.activateHqConnector(credentials);
+    engine.hqConnector.stop();
+    engine.hqConnector.metricsProvider = async () => ({
+      security: { score: 96, quarantineCount: 0 }
+    });
+    engine.hqConnector.allowHttp = true;
+    engine.hqConnector.running = true;
+    store.revokeDevice(credentials.deviceId);
+
+    await engine.hqConnector.pulse();
+
+    let newPending = null;
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      newPending = await loadPendingHqEnrollment();
+      if (newPending &&
+          engine.events.some((event) => event.type === "hq.reenrollment-pending")) break;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.ok(engine.events.some((event) => event.type === "hq.reauthorization-required"));
+    assert.ok(engine.events.some((event) => event.type === "hq.reenrollment-pending"));
+    assert.equal(await loadHqCredentials(), null);
+    assert.ok(newPending);
+    assert.equal(newPending.status, "pending");
+    assert.match(newPending.verificationCode, /^\d{6}$/);
+    await engine.stopManagement();
+    store.reviewEnrollmentRequest(
+      newPending.requestId,
+      true,
+      newPending.verificationCode
+    );
+    const reEnrollment = await pollHqEnrollment(newPending);
+    assert.equal(reEnrollment.status, "approved");
+    assert.equal(reEnrollment.credentials.deviceId, credentials.deviceId);
+    assert.notEqual(reEnrollment.credentials.token, credentials.token);
+
+    await engine.stopManagement();
+  } finally {
+    delete process.env.SENTRYLOOM_ALLOW_INSECURE_HQ;
+    await hq.close();
+    store.close();
+    await fs.rm(dbFile, { force: true }).catch(() => {});
+  }
 });
