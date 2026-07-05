@@ -57,7 +57,7 @@ publish the signed Setup executable from an elevated HQ PowerShell session:
 
 ```powershell
 .\Publish-SentryLoomUpdate.ps1 `
-  -SetupFile C:\Releases\SentryLoom-Setup-0.16.10.exe `
+  -SetupFile C:\Releases\SentryLoom-Setup-0.16.11.exe `
   -ReleaseNotes 'Security engine and stability update'
 ```
 

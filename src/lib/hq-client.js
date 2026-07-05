@@ -514,6 +514,34 @@ export async function relocateHq(credentials, options = {}) {
   return relocatedCredentials;
 }
 
+export async function recoverHqAddress(credentials, options = {}) {
+  if (!credentials) return null;
+  const allowHttp = Boolean(
+    options.allowHttp || process.env.SENTRYLOOM_ALLOW_INSECURE_HQ === "1"
+  );
+  const expectedFingerprint = normalizeFingerprint(credentials.fingerprint256);
+  if (!expectedFingerprint && !allowHttp) return null;
+  const discover = options.discover || discoverHqServers;
+  const relocate = options.relocate || relocateHq;
+  const servers = await discover(options);
+  const currentUrl = normalizeHqUrl(credentials.serverUrl, {
+    allowHttp
+  });
+  const candidates = servers.filter((server) =>
+    normalizeFingerprint(server.fingerprint256) === expectedFingerprint &&
+    normalizeHqUrl(server.url, { allowHttp }) !== currentUrl
+  );
+  for (const candidate of candidates) {
+    try {
+      return await relocate(credentials, {
+        serverUrl: candidate.url,
+        allowHttp
+      });
+    } catch {}
+  }
+  return null;
+}
+
 export async function pollHqEnrollment(pending) {
   const allowHttp = process.env.SENTRYLOOM_ALLOW_INSECURE_HQ === "1";
   const response = await hqRequest(
@@ -810,6 +838,7 @@ export class HqConnector {
     this.commandExecutor = options.commandExecutor;
     this.onEvent = options.onEvent;
     this.stateWriter = options.stateWriter;
+    this.addressRecovery = options.addressRecovery;
     this.intervalMs = Math.max(1000, Number(options.intervalMs) || 1500);
     this.telemetryIntervalMs = Math.max(2000, Number(options.telemetryIntervalMs) || 2000);
     this.maximumRetryMs = Math.max(this.intervalMs, Number(options.maximumRetryMs) || 30000);
@@ -838,6 +867,11 @@ export class HqConnector {
     this.maintenanceAuthorizationSupported = null;
     this.abuseChGatewayConfigured = null;
     this.authenticationRejected = false;
+    this.addressRecoveryIntervalMs = Math.max(
+      10000,
+      Number(options.addressRecoveryIntervalMs) || 60000
+    );
+    this.lastAddressRecoveryAt = null;
   }
 
   start() {
@@ -961,6 +995,44 @@ export class HqConnector {
       this.lastError = error.message;
       this.lastErrorAt = new Date().toISOString();
       this.consecutiveFailures += 1;
+      const addressRecoveryDue = this.addressRecovery &&
+        this.consecutiveFailures >= this.failureThreshold &&
+        (!this.lastAddressRecoveryAt ||
+          now - new Date(this.lastAddressRecoveryAt).getTime() >=
+            this.addressRecoveryIntervalMs);
+      if (addressRecoveryDue) {
+        this.lastAddressRecoveryAt = new Date(now).toISOString();
+        try {
+          const previousServerUrl = this.credentials.serverUrl;
+          const relocated = await this.addressRecovery(this.credentials);
+          if (relocated && relocated.serverUrl !== previousServerUrl) {
+            this.credentials = relocated;
+            this.lastTelemetryAt = 0;
+            this.lastError = null;
+            this.lastErrorAt = null;
+            this.connectionState = "connecting";
+            this.consecutiveFailures = 0;
+            this.nextRetryAt = null;
+            this.offlineNotified = false;
+            this.emit({
+              type: "hq.address-relocated",
+              hqName: relocated.hqName,
+              previousServerUrl,
+              serverUrl: relocated.serverUrl,
+              message: "The pinned HQ was rediscovered at a new network address"
+            });
+            await this.persistState();
+            return this.intervalMs;
+          }
+        } catch (recoveryError) {
+          this.emit({
+            type: "hq.address-recovery-failed",
+            hqName: this.credentials.hqName,
+            serverUrl: this.credentials.serverUrl,
+            error: recoveryError.message
+          });
+        }
+      }
       this.connectionState = this.consecutiveFailures >= this.failureThreshold
         ? "offline"
         : "reconnecting";
@@ -1063,7 +1135,8 @@ export class HqConnector {
       hqCapabilities: this.hqCapabilities,
       maintenanceAuthorizationSupported: this.maintenanceAuthorizationSupported,
       abuseChGatewayConfigured: this.abuseChGatewayConfigured,
-      reEnrollmentRequired: this.authenticationRejected
+      reEnrollmentRequired: this.authenticationRejected,
+      lastAddressRecoveryAt: this.lastAddressRecoveryAt
     };
   }
 }

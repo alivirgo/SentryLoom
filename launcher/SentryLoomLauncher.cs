@@ -14,8 +14,8 @@ using System.Text.RegularExpressions;
 [assembly: AssemblyCompany("NUC7 Studios")]
 [assembly: AssemblyProduct("SentryLoom Endpoint Security")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 NUC7 Studios")]
-[assembly: AssemblyVersion("0.16.10.0")]
-[assembly: AssemblyFileVersion("0.16.10.0")]
+[assembly: AssemblyVersion("0.16.11.0")]
+[assembly: AssemblyFileVersion("0.16.11.0")]
 [assembly: ComVisible(false)]
 
 namespace NUC7Studios.SentryLoom

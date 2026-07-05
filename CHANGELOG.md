@@ -4,6 +4,23 @@ All notable changes to SentryLoom will be documented here.
 
 The project uses semantic versioning where practical.
 
+## [0.16.11] - 2026-07-05
+
+SentryLoom Endpoint Security v0.16.11 ships with SentryLoom HQ v0.4.5.
+
+### Dynamic HQ network addresses
+
+- Managed clients now automatically rediscover an enrolled HQ when its saved
+  IP address stops responding.
+- A discovered address is adopted only after its TLS certificate matches the
+  existing pinned fingerprint and the existing device token authenticates.
+- Rogue or unrelated HQ discovery responses are ignored even when they use the
+  same display name or port.
+- Recovery is retried at a bounded interval while normal connection backoff
+  continues, allowing DHCP address changes to heal without manual edits.
+- The installer retains its verified pre-upgrade relocation bootstrap for
+  clients updating while their previous HQ address is already offline.
+
 ## [0.16.10] - 2026-07-05
 
 SentryLoom Endpoint Security v0.16.10 ships with SentryLoom HQ v0.4.5.

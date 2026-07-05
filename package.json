@@ -1,6 +1,6 @@
 {
   "name": "sentryloom-endpoint-security",
-  "version": "0.16.10",
+  "version": "0.16.11",
   "private": true,
   "type": "module",
   "description": "Open-source, offline-first Windows endpoint security, antivirus, EDR monitoring, encrypted quarantine, and on-premises fleet management.",

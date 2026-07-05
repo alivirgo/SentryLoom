@@ -52,6 +52,7 @@ const {
   HqConnector,
   pollHqEnrollment,
   probeHq,
+  recoverHqAddress,
   relocateHq,
   requestHqEnrollment
 } = await import("../src/lib/hq-client.js");
@@ -360,7 +361,7 @@ test("client upgrades preserve stored settings and record a versioned migration"
   assert.deepEqual(config.scanner.exclusions, ["C:\\Preserve-Me"]);
   const migration = JSON.parse(await fs.readFile(path.join(data, "upgrade-state.json"), "utf8"));
   assert.equal(migration.previousVersion, "0.16.1");
-  assert.equal(migration.currentVersion, "0.16.10");
+  assert.equal(migration.currentVersion, "0.16.11");
   const backups = await fs.readdir(path.join(data, "upgrade-backups"));
   assert.equal(backups.some((name) => name.startsWith("config-0.16.1-")), true);
 });
@@ -567,6 +568,80 @@ test("HQ connector backs off, reports outages, and reconnects after resume", asy
   await connector.pulse();
   assert.equal(events.some((event) => event.type === "system.resume-detected"), true);
   assert.equal(states.at(-1).connectionState, "online");
+  connector.stop();
+});
+
+test("HQ address recovery follows only the enrolled certificate identity", async () => {
+  const credentials = {
+    serverUrl: "https://192.168.1.12:8443",
+    fingerprint256: "A".repeat(64),
+    hqName: "Test HQ",
+    deviceId: crypto.randomUUID(),
+    token: crypto.randomBytes(32).toString("base64url"),
+    enrolledAt: new Date().toISOString()
+  };
+  const attempted = [];
+  const recovered = await recoverHqAddress(credentials, {
+    discover: async () => [
+      {
+        name: "Rogue HQ",
+        url: "https://192.168.1.20:8443",
+        fingerprint256: "B".repeat(64)
+      },
+      {
+        name: "Moved HQ",
+        url: "https://192.168.1.11:8443",
+        fingerprint256: "A".repeat(64)
+      }
+    ],
+    relocate: async (current, options) => {
+      attempted.push(options.serverUrl);
+      return { ...current, serverUrl: options.serverUrl };
+    }
+  });
+  assert.deepEqual(attempted, ["https://192.168.1.11:8443"]);
+  assert.equal(recovered.serverUrl, "https://192.168.1.11:8443");
+});
+
+test("HQ connector automatically adopts a verified rediscovered address", async () => {
+  const events = [];
+  const credentials = {
+    serverUrl: "https://192.168.1.12:8443",
+    fingerprint256: "A".repeat(64),
+    hqName: "Test HQ",
+    deviceId: crypto.randomUUID(),
+    token: crypto.randomBytes(32).toString("base64url"),
+    enrolledAt: new Date().toISOString()
+  };
+  const connector = new HqConnector(credentials, {
+    intervalMs: 1000,
+    telemetryIntervalMs: 2000,
+    failureThreshold: 1,
+    metricsProvider: async () => ({ security: { score: 100 } }),
+    commandExecutor: async () => ({}),
+    addressRecovery: async (current) => ({
+      ...current,
+      serverUrl: "https://192.168.1.11:8443"
+    }),
+    onEvent: (event) => events.push(event)
+  });
+  connector.request = async (route) => {
+    if (connector.credentials.serverUrl.endsWith("1.12:8443")) {
+      throw new Error("connect ECONNREFUSED 192.168.1.12:8443");
+    }
+    return route.endsWith("/commands")
+      ? { commands: [] }
+      : { hq: { capabilities: [] } };
+  };
+  connector.running = true;
+
+  assert.equal(await connector.pulse(), 1000);
+  assert.equal(connector.credentials.serverUrl, "https://192.168.1.11:8443");
+  assert.equal(connector.status().connectionState, "connecting");
+  assert.equal(events.some((event) => event.type === "hq.address-relocated"), true);
+
+  assert.equal(await connector.pulse(), 1000);
+  assert.equal(connector.status().connected, true);
   connector.stop();
 });
 

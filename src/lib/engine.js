@@ -47,6 +47,7 @@ import {
   enrollWithHq,
   HqEnrollmentPoller,
   HqConnector,
+  recoverHqAddress,
   relocateHq as relocateHqCredentials,
   requestHqEnrollment,
   requestHqMaintenancePassword
@@ -243,18 +244,20 @@ export class AntivirusEngine {
   }
 
   activateHqConnector(credentials) {
-    this.hqConnector = new HqConnector(credentials, {
+    const connector = new HqConnector(credentials, {
       metricsProvider: () => this.getHqTelemetry(),
       commandExecutor: (command) => this.executeHqCommand(command),
+      addressRecovery: (currentCredentials) => recoverHqAddress(currentCredentials),
       onEvent: (event) => {
         this.emit(event);
         if (event.type === "hq.reauthorization-required") {
-          void this.beginHqReEnrollment(credentials).catch(() => {});
+          void this.beginHqReEnrollment(connector.credentials).catch(() => {});
         }
       },
       stateWriter: (state) => writeJsonAtomic(appPaths().hqConnectorState, state)
     });
-    this.hqConnector.start();
+    this.hqConnector = connector;
+    connector.start();
   }
 
   beginHqReEnrollment(credentials) {
@@ -627,7 +630,10 @@ export class AntivirusEngine {
         : null,
       reEnrollmentRequired: Boolean(
         delegatedStateFresh && delegatedState.reEnrollmentRequired
-      )
+      ),
+      lastAddressRecoveryAt: delegatedStateFresh
+        ? delegatedState.lastAddressRecoveryAt || null
+        : null
     };
   }
 
