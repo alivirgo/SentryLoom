@@ -475,7 +475,9 @@ export class AntivirusEngine {
         credentials
       },
       audit,
-      quarantineCount: quarantine.filter((item) => item.state === "quarantined").length,
+      quarantineCount: quarantine.filter((item) => (
+        item.state === "quarantined" || item.state === "orphaned"
+      )).length,
       lastScan: history[0] || null,
       activeScan: active,
       progress: active ? this.lastScanProgress : null,
@@ -910,6 +912,9 @@ export class AntivirusEngine {
   }
 
   async saveThreatCredentials(credentials) {
+    if (this.config.management.enabled) {
+      throw new Error("Managed endpoints receive abuse.ch access through SentryLoom HQ; no key is stored on this client");
+    }
     await saveThreatCredentials(credentials);
     await appendAudit("threat-intel.credentials-updated", { abuseChConfigured: Boolean(credentials.abuseChAuthKey) });
     return threatCredentialStatus();

@@ -9,15 +9,18 @@ import { fileURLToPath } from "node:url";
 import { HqStore, verifyAdminPassword } from "./store.js";
 import { compareVersions, UpdateService } from "./update-service.js";
 import { wakeDevice } from "./wake-on-lan.js";
+import { HqSecretStore } from "./secret-store.js";
+import { ThreatGateway } from "./threat-gateway.js";
 
 const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 const publicDirectory = path.resolve(moduleDirectory, "..", "public");
 const DISCOVERY_REQUEST = "SENTRYLOOM_HQ_DISCOVER_V1";
-const HQ_VERSION = "0.4.3";
+const HQ_VERSION = "0.4.4";
 const DEFAULT_UPDATE_STAGING = "Z:\\Extreme Control\\SentryLoom Updates";
 const HQ_CAPABILITIES = Object.freeze([
   "maintenance-authorization-v1",
-  "maintenance-request-v1"
+  "maintenance-request-v1",
+  "threat-intelligence-gateway-v1"
 ]);
 const SETTING_OPTIONS = Object.freeze({
   retentionDays: [30, 90, 365],
@@ -95,7 +98,7 @@ function stagingDirectory(value, fallback = DEFAULT_UPDATE_STAGING) {
 }
 
 export function applyHqSettings(config, update = {}) {
-  config.schemaVersion = Math.max(3, Number(config.schemaVersion) || 1);
+  config.schemaVersion = Math.max(4, Number(config.schemaVersion) || 1);
   config.telemetryRetentionDays = selected(
     update.telemetryRetentionDays ?? config.telemetryRetentionDays,
     SETTING_OPTIONS.retentionDays,
@@ -134,6 +137,10 @@ export function applyHqSettings(config, update = {}) {
       SETTING_OPTIONS.maintenanceUses,
       1
     )
+  };
+  config.secrets = {
+    ...(config.secrets || {}),
+    path: String(config.secrets?.path || "hq-secrets.json")
   };
   config.updates = {
     ...config.updates,
@@ -273,6 +280,10 @@ export async function createHqServer(config, options = {}) {
   const updateService = options.updateService || new UpdateService(
     config.updates?.directory || path.join(path.dirname(config.databasePath), "updates")
   );
+  const secretStore = options.secretStore || new HqSecretStore(
+    config.secrets?.path || path.join(path.dirname(config.databasePath), "hq-secrets.json")
+  );
+  const threatGateway = options.threatGateway || new ThreatGateway(secretStore);
   const sessions = new Map();
   const loginAttempts = new Map();
   const adminAttempts = new Map();
@@ -453,9 +464,19 @@ export async function createHqServer(config, options = {}) {
             receivedAt,
             hq: {
               version: HQ_VERSION,
-              capabilities: HQ_CAPABILITIES
+              capabilities: HQ_CAPABILITIES,
+              abuseChGatewayConfigured: (await threatGateway.status()).abuseChConfigured
             }
           });
+          return;
+        }
+        const threatGatewayMatch = url.pathname.match(
+          /^\/api\/v1\/device\/threat-intelligence\/(malwarebazaar|urlhaus|threatfox)$/i
+        );
+        if (request.method === "GET" && threatGatewayMatch) {
+          sendJson(response, 200, await threatGateway.fetchSource(
+            threatGatewayMatch[1].toLowerCase()
+          ));
           return;
         }
         if (request.method === "POST" && url.pathname === "/api/v1/device/maintenance-requests") {
@@ -664,6 +685,23 @@ export async function createHqServer(config, options = {}) {
             autoDeploy: Boolean(config.updates?.autoDeploy),
             staging: await updateService.stagingStatus(config.updates.stagingDirectory)
           });
+          return;
+        }
+        if (request.method === "GET" && url.pathname === "/api/admin/threat-credentials") {
+          sendJson(response, 200, await secretStore.status());
+          return;
+        }
+        if (request.method === "PUT" && url.pathname === "/api/admin/threat-credentials") {
+          const body = await readJson(request);
+          const status = await secretStore.setAbuseChAuthKey(body.abuseChAuthKey);
+          threatGateway.clearCache();
+          sendJson(response, 200, status);
+          return;
+        }
+        if (request.method === "DELETE" && url.pathname === "/api/admin/threat-credentials") {
+          const status = await secretStore.clearAbuseChAuthKey();
+          threatGateway.clearCache();
+          sendJson(response, 200, status);
           return;
         }
         if (request.method === "GET" && url.pathname === "/api/admin/maintenance") {

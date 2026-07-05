@@ -9,6 +9,7 @@ try {
     sources: workerData.sources,
     config: workerData.config,
     credentials: workerData.credentials,
+    hqCredentials: workerData.hqCredentials,
     force: workerData.force,
     onProgress: (progress) => parentPort.postMessage({ type: "progress", progress })
   });

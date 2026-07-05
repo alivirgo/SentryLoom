@@ -7,7 +7,7 @@ param(
     [string]$ResultPath,
     [string]$AdminPasswordFile,
     [string]$InstallLogPath,
-    [string]$TargetVersion = '0.4.3'
+    [string]$TargetVersion = '0.4.4'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -120,6 +120,16 @@ try {
     }
 
     $Config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
+    & "$env:WINDIR\System32\icacls.exe" `
+        (Join-Path $PSScriptRoot 'data') `
+        '/inheritance:r' `
+        '/grant:r' `
+        '*S-1-5-18:(OI)(CI)F' `
+        '*S-1-5-32-544:(OI)(CI)F' | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Could not restrict the HQ data and protected-secret permissions.'
+    }
+    Write-InstallStep 'Restricted HQ data and protected secrets to SYSTEM and local administrators.'
     $StagingDirectory = if ($Config.updates.stagingDirectory) {
         [string]$Config.updates.stagingDirectory
     } else {

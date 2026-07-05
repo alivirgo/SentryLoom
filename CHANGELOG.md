@@ -4,6 +4,41 @@ All notable changes to SentryLoom will be documented here.
 
 The project uses semantic versioning where practical.
 
+## [0.16.8] - 2026-07-05
+
+SentryLoom Endpoint Security v0.16.8 ships with SentryLoom HQ v0.4.4.
+
+### Quarantine index self-repair
+
+- Prevented a missing or malformed quarantine index from aborting dashboard
+  bootstrap and leaving every protection card indefinitely in `Checking`.
+- Added an atomic last-known-good index, cross-process writer locking, and
+  automatic recovery when the primary index is deleted or corrupted.
+- Preserved malformed index bytes as SHA-256-addressed evidence and recorded
+  every recovery in the authenticated audit log.
+- Reconciled surviving encrypted quarantine containers after metadata loss.
+  Recovered items remain isolated and visible without offering an unsafe
+  restore to an unknown original path.
+
+## [0.16.7] - 2026-07-05
+
+SentryLoom Endpoint Security v0.16.7 ships with SentryLoom HQ v0.4.4.
+
+### Server-owned abuse.ch authentication
+
+- Moved the abuse.ch Auth-Key to HQ and removed the credential page from
+  endpoint Setup.
+- Protected the HQ key with Windows DPAPI, a dedicated random revision, and
+  SYSTEM/administrator-only data-directory ACLs. The plaintext key is never
+  written to configuration, logs, manifests, telemetry, or client storage.
+- Added an authenticated, certificate-pinned HQ gateway for MalwareBazaar,
+  URLhaus, and ThreatFox. HQ applies the key only to allowlisted upstream
+  requests and caches bounded JSON responses to prevent fleet request bursts.
+- Made managed client key controls read-only. Clients now show that abuse.ch
+  access is maintained by HQ after the server confirms configuration, and
+  remove any prior locally stored key when management enrollment begins.
+- Preserved local encrypted key support for standalone endpoints only.
+
 ## [0.16.6] - 2026-07-05
 
 SentryLoom Endpoint Security v0.16.6 ships with SentryLoom HQ v0.4.3.

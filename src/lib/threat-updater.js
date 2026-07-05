@@ -13,6 +13,7 @@ import {
   fetchThreatFox,
   threatFoxEntries
 } from "./threat-feeds.js";
+import { fetchHqThreatFeed } from "./hq-client.js";
 
 function now() {
   return new Date().toISOString();
@@ -174,7 +175,11 @@ async function updateClamAv(database, writer, context) {
 }
 
 async function updateMalwareBazaar(database, writer, context) {
-  const payload = await fetchMalwareBazaar(context.config, context.credentials.abuseChAuthKey, context.fetchImpl);
+  const payload = context.hqCredentials
+    ? await (context.hqFetchImpl || fetchHqThreatFeed)(context.hqCredentials, "malwarebazaar", {
+      timeoutMs: context.config.requestTimeoutMs
+    })
+    : await fetchMalwareBazaar(context.config, context.credentials.abuseChAuthKey, context.fetchImpl);
   const entries = malwareBazaarEntries(payload);
   const timestamp = now();
   database.exec("BEGIN IMMEDIATE");
@@ -199,7 +204,11 @@ async function updateMalwareBazaar(database, writer, context) {
 }
 
 async function updateUrlhaus(database, writer, context) {
-  const payload = await fetchUrlhaus(context.config, context.credentials.abuseChAuthKey, context.fetchImpl);
+  const payload = context.hqCredentials
+    ? await (context.hqFetchImpl || fetchHqThreatFeed)(context.hqCredentials, "urlhaus", {
+      timeoutMs: context.config.requestTimeoutMs
+    })
+    : await fetchUrlhaus(context.config, context.credentials.abuseChAuthKey, context.fetchImpl);
   const entries = urlhausEntries(payload);
   const timestamp = now();
   database.exec("BEGIN IMMEDIATE");
@@ -253,7 +262,11 @@ async function updateFeodoTracker(database, writer, context) {
 }
 
 async function updateThreatFox(database, writer, context) {
-  const payload = await fetchThreatFox(context.config, context.credentials.abuseChAuthKey, context.fetchImpl);
+  const payload = context.hqCredentials
+    ? await (context.hqFetchImpl || fetchHqThreatFeed)(context.hqCredentials, "threatfox", {
+      timeoutMs: context.config.requestTimeoutMs
+    })
+    : await fetchThreatFox(context.config, context.credentials.abuseChAuthKey, context.fetchImpl);
   const entries = threatFoxEntries(payload);
   const timestamp = now();
   database.exec("BEGIN IMMEDIATE");
@@ -289,8 +302,10 @@ export async function updateThreatFeeds(options) {
     for (const source of sources) {
       const startedAt = now();
       try {
-        if (FEED_SOURCES[source].requiresAuth && !options.credentials?.abuseChAuthKey) {
-          throw new Error("A free abuse.ch Auth-Key is required");
+        if (FEED_SOURCES[source].requiresAuth &&
+            !options.credentials?.abuseChAuthKey &&
+            !options.hqCredentials) {
+          throw new Error("An abuse.ch Auth-Key is required locally or through SentryLoom HQ");
         }
         enforceInterval(writer, source, options.config.minimumUpdateIntervalMinutes, options.force);
         writer.status(source, { state: "updating", lastAttempt: startedAt, error: null });

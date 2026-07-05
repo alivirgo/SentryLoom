@@ -25,6 +25,8 @@ import {
   ipv4BroadcastAddress,
   wakeDevice
 } from "../src/wake-on-lan.js";
+import { HqSecretStore } from "../src/secret-store.js";
+import { ThreatGateway } from "../src/threat-gateway.js";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -134,7 +136,7 @@ test("HQ settings expose only discrete safe values and preserve secret admin fie
   assert.equal(config.admin.passwordHash, "secret-hash");
   assert.equal(config.admin.salt, "secret-salt");
   assert.deepEqual(publicHqSettings(config), {
-    schemaVersion: 3,
+    schemaVersion: 4,
     telemetryRetentionDays: 365,
     offlineAfterSeconds: 300,
     sessionHours: 8,
@@ -181,6 +183,44 @@ test("HQ publishes the highest signed staged client version atomically", async (
     assert.equal((await service.latest()).sha256, published.sha256);
     assert.equal((await service.stagingStatus(staging)).latest.version, "2.0.0");
     assert.equal("sourceFile" in service.publicManifest(published), false);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("HQ protects the abuse.ch key at rest and never returns it through the gateway", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "sentryloom-hq-secrets-"));
+  const file = path.join(root, "hq-secrets.json");
+  const authKey = "unit-test-server-auth-key-123456";
+  const protect = async (value) => Buffer.from(value).reverse().toString("base64");
+  const unprotect = async (value) =>
+    Buffer.from(String(value), "base64").reverse();
+  const secretStore = new HqSecretStore(file, { protect, unprotect });
+  let upstreamRequests = 0;
+  const gateway = new ThreatGateway(secretStore, {
+    fetch: async (url, options) => {
+      upstreamRequests += 1;
+      assert.equal(options.headers["Auth-Key"], authKey);
+      return new Response(JSON.stringify({
+        query_status: "ok",
+        payloads: [{ sha256_hash: "a".repeat(64) }]
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+  });
+  try {
+    const status = await secretStore.setAbuseChAuthKey(authKey);
+    assert.equal(status.abuseChConfigured, true);
+    assert.equal((await fs.readFile(file, "utf8")).includes(authKey), false);
+    const first = await gateway.fetchSource("urlhaus");
+    const second = await gateway.fetchSource("urlhaus");
+    assert.equal(first.payload.query_status, "ok");
+    assert.equal(second.cached, true);
+    assert.equal(upstreamRequests, 1);
+    assert.equal(JSON.stringify(first).includes(authKey), false);
+    assert.equal((await secretStore.clearAbuseChAuthKey()).abuseChConfigured, false);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
@@ -238,8 +278,10 @@ test("HQ UI exposes one-click staged publishing and Wake-on-LAN", async () => {
   assert.match(html, /id="publish-staged-update"[^>]*>Publish latest and deploy/);
   assert.match(html, /id="setting-staging-directory"/);
   assert.match(html, /data-wake>Wake on LAN/);
+  assert.match(html, /id="save-server-abuse-key"/);
   assert.match(app, /\/api\/admin\/update\/publish-latest/);
   assert.match(app, /\/api\/admin\/devices\/\$\{selectedDeviceId\}\/wake/);
+  assert.match(app, /\/api\/admin\/threat-credentials/);
 });
 
 test("HQ enrolls, authenticates telemetry, and delivers allowlisted commands", async () => {
@@ -330,11 +372,16 @@ test("HQ enrolls, authenticates telemetry, and delivers allowlisted commands", a
     });
     assert.equal(telemetryResponse.status, 202);
     const telemetryAcknowledgement = await telemetryResponse.json();
-    assert.equal(telemetryAcknowledgement.hq.version, "0.4.3");
+    assert.equal(telemetryAcknowledgement.hq.version, "0.4.4");
     assert.equal(
       telemetryAcknowledgement.hq.capabilities.includes("maintenance-authorization-v1"),
       true
     );
+    assert.equal(
+      telemetryAcknowledgement.hq.capabilities.includes("threat-intelligence-gateway-v1"),
+      true
+    );
+    assert.equal(telemetryAcknowledgement.hq.abuseChGatewayConfigured, false);
     const updateMetadataResponse = await fetch(`${origin}/api/v1/device/update`, {
       headers: deviceHeaders
     });

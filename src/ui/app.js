@@ -416,14 +416,14 @@ function escapeHtml(value) {
 }
 
 function renderQuarantine(items) {
-  const active = items.filter((item) => item.state === "quarantined");
+  const active = items.filter((item) => item.state === "quarantined" || item.state === "orphaned");
   $("#quarantine-table").innerHTML = active.length ? active.map((item) => `
     <tr>
-      <td><strong>${escapeHtml(item.findings[0]?.name || "Detection")}</strong></td>
-      <td class="path" title="${escapeHtml(item.originalPath)}">${escapeHtml(item.originalPath)}</td>
+      <td><strong>${escapeHtml(item.findings?.[0]?.name || "Detection")}</strong></td>
+      <td class="path" title="${escapeHtml(item.originalPath || item.storedFile)}">${escapeHtml(item.originalPath || "Original path metadata unavailable")}</td>
       <td>${relativeTime(item.quarantinedAt)}</td>
-      <td><span class="status-pill">ISOLATED</span></td>
-      <td><button class="table-action" data-restore="${item.id}">Restore</button><button class="table-action delete" data-delete="${item.id}">Delete</button></td>
+      <td><span class="status-pill${item.state === "orphaned" ? " warning" : ""}">${item.state === "orphaned" ? "RECOVERED" : "ISOLATED"}</span></td>
+      <td>${item.state === "quarantined" ? `<button class="table-action" data-restore="${item.id}">Restore</button>` : ""}<button class="table-action delete" data-delete="${item.id}">Delete</button></td>
     </tr>
   `).join("") : `<tr><td colspan="5" class="muted">The quarantine vault is empty.</td></tr>`;
 }
@@ -435,7 +435,9 @@ async function refreshQuarantine() {
     const items = await quarantineRequest;
     if (dashboard) dashboard.quarantine = items;
     renderQuarantine(items);
-    knownQuarantineCount = items.filter((item) => item.state === "quarantined").length;
+    knownQuarantineCount = items.filter((item) => (
+      item.state === "quarantined" || item.state === "orphaned"
+    )).length;
     return items;
   } finally {
     quarantineRequest = null;
@@ -548,7 +550,11 @@ function renderDeviceControl(status) {
 }
 
 function renderThreatIntel(status) {
-  const configured = status.threatUpdates.credentials.abuseChConfigured;
+  const managed = Boolean(status.management?.enabled);
+  const gatewayConfigured = status.management?.abuseChGatewayConfigured === true;
+  const configured = managed
+    ? gatewayConfigured
+    : status.threatUpdates.credentials.abuseChConfigured;
   for (const feed of status.signatures.threatIntel.feeds) {
     const state = $(`#feed-state-${feed.source}`);
     const count = $(`#feed-count-${feed.source}`);
@@ -567,6 +573,17 @@ function renderThreatIntel(status) {
     count.textContent = `${feed.entryCount.toLocaleString()} indicator${feed.entryCount === 1 ? "" : "s"}`;
   }
   const running = status.threatUpdates.running;
+  const credentialState = $("#abuse-auth-key-state");
+  credentialState.textContent = managed
+    ? gatewayConfigured
+      ? "abuse.ch Auth-Key is added and maintained by SentryLoom HQ. The key is never sent to or stored on this client."
+      : "Waiting for an HQ administrator to add the abuse.ch Auth-Key on the server."
+    : "Standalone key storage is local and authenticated-encrypted. Managed endpoints use the HQ gateway instead.";
+  $("#abuse-auth-key").disabled = managed;
+  $("#abuse-auth-key").placeholder = managed
+    ? gatewayConfigured ? "Managed securely by SentryLoom HQ" : "Configure the key in SentryLoom HQ"
+    : "Paste your free Auth-Key";
+  $("#save-auth-key").disabled = managed || running;
   $$(".feed-update, #update-all-feeds").forEach((button) => { button.disabled = running; });
   $("#update-progress").classList.toggle("hidden", !running);
   if (running) {

@@ -311,7 +311,7 @@
           <div class="credential-row">
             <div>
               <label for="abuse-auth-key"><strong>abuse.ch Auth-Key</strong></label>
-              <small>Required by MalwareBazaar, URLhaus, and ThreatFox. Stored locally with authenticated encryption. <span class="setting-auth-badge open">No maintenance password required</span></small>
+              <small id="abuse-auth-key-state">Standalone endpoints may store a key locally with authenticated encryption. Managed endpoints receive abuse.ch access through HQ without receiving the key.</small>
             </div>
             <input id="abuse-auth-key" type="password" autocomplete="off" placeholder="Paste your free Auth-Key">
             <button class="secondary" id="save-auth-key">Save key</button>

@@ -2,6 +2,7 @@ let csrf = "";
 let devices = [];
 let enrollmentRequests = [];
 let updateState = { update: null, autoDeploy: false, staging: null };
+let threatCredentialState = { abuseChConfigured: false, revision: null, updatedAt: null };
 let maintenanceState = { passwords: [], requests: [] };
 let serverSettings = null;
 let serverSettingsDirty = false;
@@ -405,6 +406,14 @@ function renderServerSettings(settings) {
   serverSettingsRendered = true;
 }
 
+function renderThreatCredentialState() {
+  const configured = Boolean(threatCredentialState.abuseChConfigured);
+  $("#server-abuse-key-state").textContent = configured
+    ? `Configured securely with Windows DPAPI · updated ${relative(threatCredentialState.updatedAt)} · clients authenticate through HQ`
+    : "Not configured. Managed clients cannot update authenticated abuse.ch feeds.";
+  $("#remove-server-abuse-key").disabled = !configured;
+}
+
 async function refreshDeviceDetails(force = false) {
   if (!selectedDeviceId || detailRequestActive) return;
   if (!force && !$("#device-dialog").open) return;
@@ -418,18 +427,20 @@ async function refreshDeviceDetails(force = false) {
 
 async function refresh() {
   let alertState;
-  [devices, enrollmentRequests, updateState, alertState, maintenanceState, serverSettings] = await Promise.all([
+  [devices, enrollmentRequests, updateState, alertState, maintenanceState, serverSettings, threatCredentialState] = await Promise.all([
     api("/api/admin/devices"),
     api("/api/admin/enrollment-requests"),
     api("/api/admin/update"),
     api("/api/admin/alerts"),
     api("/api/admin/maintenance"),
-    api("/api/admin/settings")
+    api("/api/admin/settings"),
+    api("/api/admin/threat-credentials")
   ]);
   renderFleet();
   renderAlerts(alertState);
   renderMaintenance();
   renderServerSettings(serverSettings);
+  renderThreatCredentialState();
   await refreshDeviceDetails();
   setServerAvailability(true);
 }
@@ -456,6 +467,50 @@ $("#login-form").addEventListener("submit", async (event) => {
   }
 });
 
+$("#save-server-abuse-key").addEventListener("click", async () => {
+  const button = $("#save-server-abuse-key");
+  const input = $("#server-abuse-auth-key");
+  const key = input.value.trim();
+  if (!key) {
+    toast("Enter the abuse.ch Auth-Key");
+    return;
+  }
+  try {
+    button.disabled = true;
+    threatCredentialState = await api("/api/admin/threat-credentials", {
+      method: "PUT",
+      body: JSON.stringify({ abuseChAuthKey: key })
+    });
+    input.value = "";
+    renderThreatCredentialState();
+    toast("Server abuse.ch Auth-Key protected with Windows DPAPI");
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$("#remove-server-abuse-key").addEventListener("click", async () => {
+  if (!window.confirm(
+    "Remove the server abuse.ch Auth-Key? Managed clients will immediately lose authenticated feed access."
+  )) return;
+  const button = $("#remove-server-abuse-key");
+  try {
+    button.disabled = true;
+    threatCredentialState = await api("/api/admin/threat-credentials", {
+      method: "DELETE",
+      body: "{}"
+    });
+    renderThreatCredentialState();
+    toast("Server abuse.ch Auth-Key removed");
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    button.disabled = false;
+  }
+});
+
 $("#refresh-fleet").addEventListener("click", () => refresh().catch((error) => toast(error.message)));
 
 $("#update-release").addEventListener("click", async (event) => {
@@ -474,7 +529,8 @@ $("#update-release").addEventListener("click", async (event) => {
   }
 });
 
-$("#server-settings-form").addEventListener("change", () => {
+$("#server-settings-form").addEventListener("change", (event) => {
+  if (event.target.closest(".server-secret-row")) return;
   serverSettingsDirty = true;
   $("#server-settings-state").textContent = "Unsaved changes";
 });

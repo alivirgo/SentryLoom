@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>SentryLoom HQ</title>
-  <link rel="stylesheet" href="/styles.css?v=0.4.3">
-  <link rel="stylesheet" href="/approvals.css?v=0.4.3">
-  <link rel="stylesheet" href="/device-details.css?v=0.4.3">
-  <link rel="stylesheet" href="/alerts.css?v=0.4.3">
+  <link rel="stylesheet" href="/styles.css?v=0.4.4">
+  <link rel="stylesheet" href="/approvals.css?v=0.4.4">
+  <link rel="stylesheet" href="/device-details.css?v=0.4.4">
+  <link rel="stylesheet" href="/alerts.css?v=0.4.4">
 </head>
 <body>
   <section class="login" id="login">
@@ -117,6 +117,15 @@
             <input id="setting-staging-directory" value="Z:\Extreme Control\SentryLoom Updates" spellcheck="false">
             <small id="update-staging-state">HQ checks this folder using its SYSTEM service identity. Use a UNC path for network shares.</small>
           </label>
+          <div class="server-secret-row">
+            <div>
+              <strong>Server-managed abuse.ch Auth-Key</strong>
+              <small id="server-abuse-key-state">Checking DPAPI-protected server credential…</small>
+            </div>
+            <input id="server-abuse-auth-key" type="password" autocomplete="new-password" placeholder="Paste or replace the server Auth-Key">
+            <button class="primary" id="save-server-abuse-key" type="button">Save server key</button>
+            <button id="remove-server-abuse-key" type="button">Remove</button>
+          </div>
         </div>
         <div class="server-settings-actions">
           <button class="primary" id="save-server-settings">Save server settings</button>
@@ -219,6 +228,6 @@
     </section>
   </dialog>
   <div class="toast" id="toast"></div>
-  <script type="module" src="/app.js?v=0.4.3"></script>
+  <script type="module" src="/app.js?v=0.4.4"></script>
 </body>
 </html>

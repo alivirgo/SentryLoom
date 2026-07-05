@@ -28,6 +28,24 @@ HQ stores the latest full sanitized snapshot for immediate display and samples
 historical trend points at a bounded interval. Clients do not send quarantined
 file contents, private keys, authentication secrets, or threat-feed credentials.
 
+## Server-managed abuse.ch access
+
+Add or rotate the abuse.ch Auth-Key under **HQ data and operations settings**.
+HQ protects it with Windows DPAPI and restricts its data directory to
+`SYSTEM` and local administrators. The key is never returned by an API and is
+never sent to an endpoint.
+
+Managed clients obtain MalwareBazaar, URLhaus, and ThreatFox data through an
+allowlisted HQ gateway over their authenticated, certificate-pinned device
+session. HQ adds the key only to the upstream abuse.ch request, enforces
+response-size and timeout limits, and caches responses to avoid a fleet-wide
+request burst. The client displays **Auth-Key is added and maintained by
+SentryLoom HQ** after HQ confirms configuration.
+
+DPAPI `LocalMachine` protection intentionally binds the secret ciphertext to
+the HQ Windows machine. After disaster recovery onto different hardware,
+enter the key again instead of copying `hq-secrets.json`.
+
 ## Publish and deploy client updates
 
 Remote updates require clients running SentryLoom 0.16.0 or later. Install that
@@ -39,7 +57,7 @@ publish the signed Setup executable from an elevated HQ PowerShell session:
 
 ```powershell
 .\Publish-SentryLoomUpdate.ps1 `
-  -SetupFile C:\Releases\SentryLoom-Setup-0.16.6.exe `
+  -SetupFile C:\Releases\SentryLoom-Setup-0.16.8.exe `
   -ReleaseNotes 'Security engine and stability update'
 ```
 
@@ -96,7 +114,7 @@ forward them.
 
 ## Initialize on the HQ Windows server
 
-Run `SentryLoom-HQ-Setup-0.4.3.exe` and provide the server's DNS/computer name.
+Run `SentryLoom-HQ-Setup-0.4.4.exe` and provide the server's DNS/computer name.
 Setup installs prerequisites, initializes new servers, preserves existing data
 during upgrades, registers the self-restarting startup task, and asks for the
 administrator password with confirmation. On upgrade, the entered password

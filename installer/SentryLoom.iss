@@ -1,5 +1,5 @@
 #define MyAppName "SentryLoom Endpoint Security"
-#define MyAppVersion "0.16.6"
+#define MyAppVersion "0.16.8"
 #define MyAppPublisher "NUC7 Studios"
 #define MyAppExeName "SentryLoom.exe"
 
@@ -60,14 +60,11 @@ Filename: "{code:GetPowerShellPath}"; Parameters: "-NoLogo -NoProfile -WindowSty
 
 [Code]
 var
-  CredentialPage: TInputQueryWizardPage;
   DeploymentPage: TInputOptionWizardPage;
   HqPage: TInputQueryWizardPage;
-  AuthLink: TNewStaticText;
   InstallSummaryPage: TOutputMsgWizardPage;
   InstallDetails: TNewMemo;
   SetupWarnings: String;
-  CredentialConfigured: Boolean;
   HqEnrollmentConfigured: Boolean;
 
 function SetEnvironmentVariable(lpName, lpValue: String): Boolean;
@@ -113,13 +110,6 @@ begin
       MB_OK);
 end;
 
-procedure OpenAuthPortal(Sender: TObject);
-var
-  ResultCode: Integer;
-begin
-  ShellExec('', 'https://auth.abuse.ch/', '', '', SW_SHOWNORMAL, ewNoWait, ResultCode);
-end;
-
 procedure InitializeWizard;
 var
   Intro: String;
@@ -158,23 +148,6 @@ begin
     'Leave the URL blank to discover SentryLoom HQ automatically on this network. The endpoint remains fully protected while approval is pending.');
   HqPage.Add('HQ server URL (optional; https://server:8443):', False);
   HqPage.Add('Certificate SHA-256 fingerprint (optional):', False);
-
-  CredentialPage := CreateInputQueryPage(
-    HqPage.ID,
-    'Optional community threat intelligence',
-    'Connect MalwareBazaar, URLhaus, and ThreatFox',
-    'Create a free abuse.ch account, copy your Auth-Key, and paste it below. You may leave it blank and add it later in Settings.');
-  CredentialPage.Add('abuse.ch Auth-Key:', True);
-
-  AuthLink := TNewStaticText.Create(WizardForm);
-  AuthLink.Parent := CredentialPage.Surface;
-  AuthLink.Caption := 'Open the official abuse.ch Authentication Portal';
-  AuthLink.Cursor := crHand;
-  AuthLink.Font.Color := clBlue;
-  AuthLink.Font.Style := [fsUnderline];
-  AuthLink.Top := CredentialPage.Edits[0].Top + CredentialPage.Edits[0].Height + ScaleY(18);
-  AuthLink.Left := CredentialPage.Edits[0].Left;
-  AuthLink.OnClick := @OpenAuthPortal;
 
   InstallDetails := TNewMemo.Create(WizardForm);
   InstallDetails.Parent := WizardForm.InstallingPage;
@@ -329,37 +302,6 @@ begin
     InstallDetail('Official ClamAV scanning engine is available.');
 end;
 
-procedure SaveThreatCredential;
-var
-  ResultCode: Integer;
-begin
-  CredentialPage.Values[0] := Trim(CredentialPage.Values[0]);
-  if CredentialPage.Values[0] = '' then
-  begin
-    InstallDetail('Optional abuse.ch credential was not supplied; it can be added later.');
-    Exit;
-  end;
-  CredentialConfigured := True;
-  InstallDetail('Encrypting the supplied threat-intelligence credential with Windows protection.');
-  SetEnvironmentVariable('SENTRYLOOM_ABUSECH_KEY', CredentialPage.Values[0]);
-  try
-    if (not RunHidden(
-      GetNodePath,
-      '--disable-warning=ExperimentalWarning "' + ExpandConstant('{app}\src\cli.js') + '" credentials import-env',
-      ExpandConstant('{app}'),
-      ResultCode)) or (ResultCode <> 0) then
-    begin
-      CredentialConfigured := False;
-      SetupWarnings := SetupWarnings + 'The abuse.ch Auth-Key was not accepted. Add it later in SentryLoom Settings.' + #13#10;
-    end;
-  finally
-    SetEnvironmentVariable('SENTRYLOOM_ABUSECH_KEY', '');
-    CredentialPage.Values[0] := '';
-  end;
-  if CredentialConfigured then
-    InstallDetail('Threat-intelligence credential encrypted successfully.');
-end;
-
 procedure SaveHqEnrollment;
 var
   ResultCode: Integer;
@@ -465,10 +407,7 @@ var
   Cli, Sources: String;
 begin
   Cli := '"' + ExpandConstant('{app}\src\cli.js') + '"';
-  if CredentialConfigured then
-    Sources := 'all'
-  else
-    Sources := 'clamav';
+  Sources := 'clamav';
 
   InstallDetail('Downloading and cryptographically verifying current threat databases.');
   if (not RunHidden(
@@ -517,7 +456,6 @@ begin
     InstallDetail('Application files were copied successfully.');
     RemoveLegacyInstallation;
     InstallPrerequisites;
-    SaveThreatCredential;
     SaveHqEnrollment;
     DownloadDatabases;
     RegisterProtection;

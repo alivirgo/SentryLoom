@@ -17,6 +17,7 @@ import {
 } from "./hq-credential-store.js";
 import { appPaths } from "../constants.js";
 import { ensureDirectory } from "./fs-safe.js";
+import { clearThreatCredentials } from "./credential-store.js";
 
 const DISCOVERY_REQUEST = "SENTRYLOOM_HQ_DISCOVER_V1";
 
@@ -77,6 +78,10 @@ export function hqRequest(serverUrl, route, options = {}) {
   if (!isHttps && !options.allowHttp) return Promise.reject(new Error("SentryLoom HQ must use HTTPS"));
   const transport = isHttps ? https : http;
   const serialized = options.body === undefined ? null : JSON.stringify(options.body);
+  const maximumResponseBytes = Math.max(
+    1024,
+    Math.min(128 * 1024 * 1024, Number(options.maximumResponseBytes) || 2 * 1024 * 1024)
+  );
 
   return new Promise((resolve, reject) => {
     let peerFingerprint = "";
@@ -125,7 +130,7 @@ export function hqRequest(serverUrl, route, options = {}) {
       let bytes = 0;
       response.on("data", (chunk) => {
         bytes += chunk.length;
-        if (bytes > 2 * 1024 * 1024) {
+        if (bytes > maximumResponseBytes) {
           request.destroy(new Error("HQ response is too large"));
           return;
         }
@@ -360,6 +365,7 @@ export async function enrollWithHq(options) {
     enrolledAt: enrollmentResponse.body.enrolledAt
   };
   await saveHqCredentials(credentials);
+  await clearThreatCredentials();
   await clearPendingHqEnrollment();
   await fs.rm(appPaths().hqConnectorState, { force: true });
   return credentials;
@@ -416,6 +422,7 @@ export async function requestHqEnrollment(options = {}) {
     status: "pending"
   };
   await savePendingHqEnrollment(pending);
+  await clearThreatCredentials();
   // An explicit, successfully submitted enrollment request changes the
   // management target. Remove any preserved credentials for a previous HQ so
   // the resident agent polls this request instead of reconnecting to the old
@@ -446,6 +453,7 @@ export async function pollHqEnrollment(pending) {
       enrolledAt: response.body.enrolledAt
     };
     await saveHqCredentials(credentials);
+    await clearThreatCredentials();
     await clearPendingHqEnrollment();
     return { status: "approved", credentials };
   }
@@ -483,6 +491,27 @@ export async function authorizeHqMaintenance(credentials, password, action, opti
     }
     throw error;
   }
+}
+
+export async function fetchHqThreatFeed(credentials, source, options = {}) {
+  if (!credentials) throw new Error("This endpoint is not enrolled with SentryLoom HQ");
+  const normalizedSource = String(source || "").toLowerCase();
+  if (!["malwarebazaar", "urlhaus", "threatfox"].includes(normalizedSource)) {
+    throw new Error("The requested HQ threat-intelligence feed is not allowed");
+  }
+  const response = await hqRequest(
+    credentials.serverUrl,
+    `/api/v1/device/threat-intelligence/${normalizedSource}`,
+    {
+      credentials,
+      fingerprint256: credentials.fingerprint256,
+      allowHttp: options.allowHttp ||
+        process.env.SENTRYLOOM_ALLOW_INSECURE_HQ === "1",
+      timeoutMs: Math.max(5000, Number(options.timeoutMs) || 120000),
+      maximumResponseBytes: 110 * 1024 * 1024
+    }
+  );
+  return response.body.payload;
 }
 
 export async function requestHqMaintenancePassword(credentials, options = {}) {
@@ -698,6 +727,7 @@ export class HqConnector {
     this.hqVersion = null;
     this.hqCapabilities = [];
     this.maintenanceAuthorizationSupported = null;
+    this.abuseChGatewayConfigured = null;
   }
 
   start() {
@@ -775,6 +805,10 @@ export class HqConnector {
           this.hqCapabilities = [];
           this.maintenanceAuthorizationSupported = null;
         }
+        this.abuseChGatewayConfigured =
+          typeof telemetryResponse.hq?.abuseChGatewayConfigured === "boolean"
+            ? telemetryResponse.hq.abuseChGatewayConfigured
+            : null;
         this.lastTelemetryAt = Date.now();
       }
       const response = await this.request("/api/v1/device/commands");
@@ -900,7 +934,8 @@ export class HqConnector {
       activeCommands: this.activeCommands.size,
       hqVersion: this.hqVersion,
       hqCapabilities: this.hqCapabilities,
-      maintenanceAuthorizationSupported: this.maintenanceAuthorizationSupported
+      maintenanceAuthorizationSupported: this.maintenanceAuthorizationSupported,
+      abuseChGatewayConfigured: this.abuseChGatewayConfigured
     };
   }
 }

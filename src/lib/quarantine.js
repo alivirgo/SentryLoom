@@ -4,7 +4,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { pipeline } from "node:stream/promises";
 import { appPaths } from "../constants.js";
-import { ensureDirectory, fileExists, readJson, writeJsonAtomic } from "./fs-safe.js";
+import { ensureDirectory, fileExists, writeJsonAtomic } from "./fs-safe.js";
 import { getMasterKey } from "./key-store.js";
 import { appendAudit } from "./audit-log.js";
 
@@ -12,21 +12,277 @@ const MAGIC = Buffer.from("SLOOMQ1", "ascii");
 const LEGACY_MAGIC = Buffer.from("AEGISQ1", "ascii");
 const IV_LENGTH = 12;
 const TAG_LENGTH = 16;
+const EMPTY_INDEX = Object.freeze({ schemaVersion: 1, items: [] });
+let indexQueue = Promise.resolve();
 
 function validateId(id) {
   if (!/^[a-f0-9-]{36}$/i.test(id)) throw new Error("Invalid quarantine identifier");
 }
 
+function emptyIndex() {
+  return structuredClone(EMPTY_INDEX);
+}
+
+function validateIndex(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value) ||
+      value.schemaVersion !== 1 || !Array.isArray(value.items)) {
+    throw new Error("Quarantine index has an invalid structure");
+  }
+  for (const item of value.items) {
+    if (!item || typeof item !== "object" ||
+        !/^[a-f0-9-]{36}$/i.test(item.id || "") ||
+        path.basename(item.storedFile || "") !== item.storedFile ||
+        !item.storedFile.endsWith(".sloomq") ||
+        typeof item.state !== "string") {
+      throw new Error("Quarantine index contains an invalid item");
+    }
+  }
+  return value;
+}
+
+async function readIndexFile(file, fallbackOnMissing = false) {
+  try {
+    return validateIndex(JSON.parse(await fsp.readFile(file, "utf8")));
+  } catch (error) {
+    if (fallbackOnMissing && error.code === "ENOENT") return emptyIndex();
+    throw error;
+  }
+}
+
+async function withIndexLock(operation) {
+  const paths = appPaths();
+  await ensureDirectory(paths.quarantine);
+  const nonce = crypto.randomBytes(16).toString("hex");
+  let handle = null;
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    try {
+      handle = await fsp.open(paths.quarantineIndexLock, "wx", 0o600);
+      await handle.writeFile(JSON.stringify({
+        pid: process.pid,
+        nonce,
+        acquiredAt: new Date().toISOString()
+      }));
+      break;
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+      try {
+        const stat = await fsp.stat(paths.quarantineIndexLock);
+        if (Date.now() - stat.mtimeMs > 60000) {
+          await fsp.rm(paths.quarantineIndexLock, { force: true });
+        }
+      } catch {}
+      await new Promise((resolve) => setTimeout(resolve, 15 + Math.min(attempt, 25)));
+    }
+  }
+  if (!handle) throw new Error("Timed out waiting for the quarantine index writer");
+  try {
+    return await operation();
+  } finally {
+    await handle.close().catch(() => {});
+    try {
+      const owner = JSON.parse(await fsp.readFile(paths.quarantineIndexLock, "utf8"));
+      if (owner.nonce === nonce) await fsp.rm(paths.quarantineIndexLock, { force: true });
+    } catch {
+      await fsp.rm(paths.quarantineIndexLock, { force: true }).catch(() => {});
+    }
+  }
+}
+
+async function writeIndex(index) {
+  const paths = appPaths();
+  const validated = validateIndex(index);
+  await writeJsonAtomic(paths.quarantineIndexBackup, validated);
+  await writeJsonAtomic(paths.quarantineIndex, validated);
+}
+
+async function quarantineContainers() {
+  const paths = appPaths();
+  let entries;
+  try {
+    entries = await fsp.readdir(paths.quarantine, { withFileTypes: true });
+  } catch (error) {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  }
+  return Promise.all(entries
+    .filter((entry) => entry.isFile() && /^[a-f0-9-]{36}\.sloomq$/i.test(entry.name))
+    .map(async (entry) => {
+      let stat = null;
+      try {
+        stat = await fsp.stat(path.join(paths.quarantine, entry.name));
+      } catch {}
+      return {
+        id: entry.name.slice(0, -".sloomq".length),
+        storedFile: entry.name,
+        size: stat?.size ?? null,
+        modifiedAt: stat?.mtime.toISOString() || new Date().toISOString()
+      };
+    }));
+}
+
+async function preserveCorruptIndex(error) {
+  const paths = appPaths();
+  let bytes;
+  try {
+    bytes = await fsp.readFile(paths.quarantineIndex);
+  } catch (readError) {
+    if (readError.code === "ENOENT") return null;
+    throw readError;
+  }
+  const sha256 = crypto.createHash("sha256").update(bytes).digest("hex");
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const evidenceFile = `index-evidence-${timestamp}-${sha256.slice(0, 12)}.bin`;
+  const evidencePath = path.join(paths.quarantine, evidenceFile);
+  try {
+    await fsp.rename(paths.quarantineIndex, evidencePath);
+  } catch {
+    await fsp.copyFile(paths.quarantineIndex, evidencePath, fs.constants.COPYFILE_EXCL);
+    await fsp.rm(paths.quarantineIndex, { force: true }).catch(() => {});
+  }
+  return {
+    evidenceFile,
+    evidenceSha256: sha256,
+    originalError: error.message
+  };
+}
+
+function reconcileIndex(index, containers, recoveredAt) {
+  const containerByName = new Map(containers.map((item) => [item.storedFile, item]));
+  const known = new Set();
+  const items = index.items.map((item) => {
+    known.add(item.storedFile);
+    if (item.state === "quarantined" && !containerByName.has(item.storedFile)) {
+      return { ...item, state: "missing", missingAt: recoveredAt };
+    }
+    return item;
+  });
+  for (const container of containers) {
+    if (known.has(container.storedFile)) continue;
+    items.push({
+      id: container.id,
+      originalPath: null,
+      storedFile: container.storedFile,
+      originalSize: null,
+      originalModifiedAt: null,
+      quarantinedAt: container.modifiedAt,
+      sha256: null,
+      findings: [{ name: "Recovered encrypted item", severity: "unknown" }],
+      state: "orphaned",
+      containerSize: container.size,
+      metadataLost: true,
+      recoveredAt
+    });
+  }
+  return { ...index, schemaVersion: 1, items };
+}
+
+async function recoverIndex(originalError) {
+  return withIndexLock(async () => {
+    const paths = appPaths();
+    try {
+      return await readIndexFile(paths.quarantineIndex);
+    } catch {}
+
+    const recoveredAt = new Date().toISOString();
+    let evidence = null;
+    let evidenceError = null;
+    try {
+      evidence = await preserveCorruptIndex(originalError);
+    } catch (error) {
+      evidenceError = error.message;
+    }
+
+    let base = emptyIndex();
+    let source = "empty";
+    try {
+      base = await readIndexFile(paths.quarantineIndexBackup);
+      source = "last-good-backup";
+    } catch {}
+
+    let containers = null;
+    let containerScanError = null;
+    try {
+      containers = await quarantineContainers();
+    } catch (error) {
+      containerScanError = error.message;
+    }
+    const recovered = containers
+      ? reconcileIndex(base, containers, recoveredAt)
+      : base;
+    recovered.recovery = {
+      recoveredAt,
+      source,
+      ...(evidence || {}),
+      ...(evidenceError ? { evidenceError } : {}),
+      ...(containerScanError ? { containerScanError } : {}),
+      orphanedItems: recovered.items.filter((item) => item.state === "orphaned").length,
+      missingItems: recovered.items.filter((item) => item.state === "missing").length
+    };
+
+    let persisted = true;
+    try {
+      await writeIndex(recovered);
+    } catch {
+      persisted = false;
+    }
+    await appendAudit("quarantine.index-recovered", {
+      ...recovered.recovery,
+      persisted
+    }).catch(() => {});
+    return recovered;
+  });
+}
+
 async function readIndex() {
-  return readJson(appPaths().quarantineIndex, { schemaVersion: 1, items: [] });
+  const paths = appPaths();
+  try {
+    return await readIndexFile(paths.quarantineIndex);
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      const backupExists = await fileExists(paths.quarantineIndexBackup);
+      const containers = backupExists ? [] : await quarantineContainers().catch(() => []);
+      if (!backupExists && containers.length === 0) return emptyIndex();
+    }
+    return recoverIndex(error);
+  }
 }
 
 async function updateIndex(transform) {
-  const paths = appPaths();
-  const index = await readIndex();
-  const updated = await transform(index);
-  await writeJsonAtomic(paths.quarantineIndex, updated);
-  return updated;
+  const operation = indexQueue.then(() => withIndexLock(async () => {
+    const paths = appPaths();
+    let index;
+    try {
+      index = await readIndexFile(paths.quarantineIndex);
+    } catch (error) {
+      if (error.code === "ENOENT") {
+        const backupExists = await fileExists(paths.quarantineIndexBackup);
+        const containers = backupExists ? [] : await quarantineContainers().catch(() => []);
+        if (!backupExists && containers.length === 0) {
+          index = emptyIndex();
+        } else {
+          // Release the writer lock before invoking the recovery path.
+          throw Object.assign(error, { quarantineRecoveryRequired: true });
+        }
+      } else {
+        // Release the writer lock before invoking the recovery path.
+        throw Object.assign(error, { quarantineRecoveryRequired: true });
+      }
+    }
+    const updated = await transform(index);
+    await writeIndex(updated);
+    return updated;
+  })).catch(async (error) => {
+    if (!error.quarantineRecoveryRequired) throw error;
+    await recoverIndex(error);
+    return withIndexLock(async () => {
+      const index = await readIndexFile(appPaths().quarantineIndex);
+      const updated = await transform(index);
+      await writeIndex(updated);
+      return updated;
+    });
+  });
+  indexQueue = operation.catch(() => {});
+  return operation;
 }
 
 export async function quarantineFile(source, detection = {}) {
@@ -64,7 +320,10 @@ export async function quarantineFile(source, detection = {}) {
     findings: detection.findings || [],
     state: "quarantined"
   };
-  await updateIndex((index) => ({ ...index, items: [...index.items, record] }));
+  await updateIndex((index) => ({
+    ...index,
+    items: [...index.items.filter((item) => item.id !== id), record]
+  }));
   try {
     await fsp.rm(resolved);
   } catch (error) {

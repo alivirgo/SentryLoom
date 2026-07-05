@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "hqName": "SentryLoom HQ",
   "host": "0.0.0.0",
   "port": 8443,
@@ -28,6 +28,9 @@
   "maintenance": {
     "defaultMinutes": 10,
     "defaultUses": 1
+  },
+  "secrets": {
+    "path": "hq-secrets.json"
   },
   "updates": {
     "directory": "updates",

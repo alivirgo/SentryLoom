@@ -44,6 +44,10 @@ export async function loadThreatCredentials() {
   return JSON.parse(Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString("utf8"));
 }
 
+export async function clearThreatCredentials() {
+  await fs.rm(appPaths().threatCredentials, { force: true });
+}
+
 export async function threatCredentialStatus() {
   const credentials = await loadThreatCredentials();
   return { abuseChConfigured: Boolean(credentials.abuseChAuthKey) };

@@ -60,10 +60,13 @@ Local System, local Administrators, and the installing Windows account.
 
 ## Local secrets
 
-Endpoint credentials are encrypted locally with AES-256-GCM. HQ administrator
-passwords use PBKDF2-SHA256 with a unique random salt. Signing keys,
-certificates, runtime databases, and encrypted credential stores are excluded
-from source control.
+Standalone endpoint credentials are encrypted locally with AES-256-GCM.
+Managed abuse.ch authentication remains on HQ under Windows DPAPI and is never
+sent to clients; clients receive only bounded feed responses through their
+authenticated certificate-pinned HQ connection. HQ administrator passwords
+use PBKDF2-SHA256 with a unique random salt. Signing keys, certificates,
+runtime databases, and encrypted credential stores are excluded from source
+control.
 
 ## Public support
 

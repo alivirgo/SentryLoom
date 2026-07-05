@@ -97,9 +97,11 @@ Management and operations resources:
 - ThreatFox hashes, domains, URLs, IPs, and IP:port indicators.
 - Disk-backed SQLite indexes suitable for millions of exact indicators.
 
-Provider credentials are entered by the operator, encrypted locally, and never
-stored in source control. Each provider retains its own data license and usage
-terms.
+Standalone provider credentials are entered by the operator and encrypted
+locally. Managed deployments keep the abuse.ch Auth-Key only on HQ under
+Windows DPAPI; clients authenticate to the certificate-pinned HQ gateway and
+never receive the key. No provider credential is stored in source control.
+Each provider retains its own data license and usage terms.
 
 ### SentryLoom HQ
 

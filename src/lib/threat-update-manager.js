@@ -2,6 +2,7 @@ import { Worker } from "node:worker_threads";
 import { appPaths } from "../constants.js";
 import { loadThreatCredentials } from "./credential-store.js";
 import { appendAudit } from "./audit-log.js";
+import { loadHqCredentials } from "./hq-credential-store.js";
 
 export class ThreatUpdateManager {
   constructor(config, onEvent = () => {}) {
@@ -17,6 +18,9 @@ export class ThreatUpdateManager {
     this.running = true;
     this.progress = { phase: "starting", sources, startedAt: new Date().toISOString() };
     const credentials = await loadThreatCredentials();
+    const hqCredentials = this.config.management?.enabled
+      ? await loadHqCredentials().catch(() => null)
+      : null;
     await appendAudit("threat-intel.update-started", { sources });
     return new Promise((resolve, reject) => {
       const worker = new Worker(new URL("./threat-update-worker.js", import.meta.url), {
@@ -25,6 +29,7 @@ export class ThreatUpdateManager {
           sources,
           config: this.config.threatIntel,
           credentials,
+          hqCredentials,
           force: Boolean(options.force)
         },
         execArgv: ["--disable-warning=ExperimentalWarning"]

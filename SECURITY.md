@@ -28,7 +28,10 @@ SentryLoom does not disable Microsoft Defender, Windows Firewall, SmartScreen, U
 
 - no cloud dependency; optional on-premises HQ telemetry is disabled in standalone mode and explicitly enrolled with certificate pinning;
 - HTTPS-only, allowlisted feed hosts with download size, timeout, redirect, and update-frequency limits;
-- abuse.ch credentials encrypted locally with AES-256-GCM and never returned by the dashboard API;
+- standalone abuse.ch credentials encrypted locally with AES-256-GCM;
+- managed abuse.ch credentials retained only by HQ under Windows DPAPI and
+  restricted ACLs, with allowlisted feed responses delivered through the
+  authenticated certificate-pinned device API;
 - per-device HQ tokens encrypted locally with AES-256-GCM, independently revocable, and never returned by the dashboard API;
 - HQ enrollment uses rate-limited device requests, explicit administrator approval, encrypted request secrets, pinned HTTPS, authenticated telemetry, admin CSRF protection, and allowlisted remote actions without a shell channel;
 - network IOCs are indexed for lookup but never silently applied as Windows Firewall rules;

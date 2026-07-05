@@ -61,6 +61,12 @@
 .server-setting-wide { grid-column: 1 / -1; }
 .server-setting-wide small.ready { color: #126e60; }
 .server-setting-wide small.error { color: #a43e3e; }
+.server-secret-row { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(220px, 1fr) minmax(260px, 1.4fr) auto auto; gap: 10px; align-items: end; padding: 13px; border: 1px solid #dbe2e7; border-radius: 6px; background: #f7faf9; }
+.server-secret-row strong, .server-secret-row small { display: block; }
+.server-secret-row input { min-width: 0; width: 100%; padding: 9px; border: 1px solid #ccd5dc; border-radius: 5px; background: #fff; }
+.server-secret-row button { min-height: 38px; border: 1px solid #9bb8b1; border-radius: 6px; background: #fff; color: #126e60; padding: 8px 12px; cursor: pointer; }
+.server-secret-row button.primary { color: #fff; background: #136f63; }
+.server-secret-row button:disabled { opacity: .55; cursor: not-allowed; }
 .server-settings-actions { display: flex; align-items: center; gap: 12px; }
 .server-settings-actions > button:not(.primary) { border: 1px solid #9bb8b1; border-radius: 6px; background: #fff; color: #126e60; padding: 9px 14px; font-weight: 650; cursor: pointer; }
 .server-settings-actions > button:disabled { opacity: .55; cursor: wait; }
@@ -91,6 +97,7 @@
   .maintenance-generator { grid-template-columns: 1fr 1fr; }
   .maintenance-columns { grid-template-columns: 1fr; }
   .server-settings-grid { grid-template-columns: 1fr 1fr; }
+  .server-secret-row { grid-template-columns: 1fr 1fr; }
 }
 
 @media (max-width: 580px) {
@@ -99,4 +106,5 @@
   }
   .server-settings-grid { grid-template-columns: 1fr; }
   .server-settings-actions { align-items: stretch; flex-direction: column; }
+  .server-secret-row { grid-template-columns: 1fr; }
 }

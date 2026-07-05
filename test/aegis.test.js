@@ -341,7 +341,7 @@ test("client upgrades preserve stored settings and record a versioned migration"
   assert.deepEqual(config.scanner.exclusions, ["C:\\Preserve-Me"]);
   const migration = JSON.parse(await fs.readFile(path.join(data, "upgrade-state.json"), "utf8"));
   assert.equal(migration.previousVersion, "0.16.1");
-    assert.equal(migration.currentVersion, "0.16.6");
+  assert.equal(migration.currentVersion, "0.16.8");
   const backups = await fs.readdir(path.join(data, "upgrade-backups"));
   assert.equal(backups.some((name) => name.startsWith("config-0.16.1-")), true);
 });
@@ -416,6 +416,51 @@ test("quarantine encrypts, removes, restores, and permanently deletes files", as
   await deleteQuarantine(doomed.id);
   const records = await listQuarantine();
   assert.equal(records.find((entry) => entry.id === doomed.id).state, "deleted");
+});
+
+test("quarantine recovers a corrupt index from its last-known-good copy", async () => {
+  const root = await sandbox("quarantine-index-recovery");
+  const source = path.join(root, "recover.bin");
+  await fs.writeFile(source, "preserve this encrypted item");
+  const item = await quarantineFile(source, {
+    sha256: "recovery-hash",
+    findings: [{ name: "Recovery test" }]
+  });
+  const quarantine = path.join(process.env.SENTRYLOOM_DATA_DIR, "quarantine");
+  const indexFile = path.join(quarantine, "index.json");
+  await fs.writeFile(indexFile, Buffer.alloc(96));
+
+  const records = await listQuarantine();
+  const recovered = records.find((entry) => entry.id === item.id);
+  assert.equal(recovered.state, "quarantined");
+  assert.equal(recovered.originalPath, source);
+
+  const repairedIndex = JSON.parse(await fs.readFile(indexFile, "utf8"));
+  assert.equal(repairedIndex.recovery.source, "last-good-backup");
+  assert.equal(repairedIndex.recovery.evidenceSha256.length, 64);
+  const files = await fs.readdir(quarantine);
+  assert.equal(files.some((name) => name.startsWith("index-evidence-") && name.endsWith(".bin")), true);
+  const audit = await readRecentAudit(10);
+  assert.equal(audit.some((record) => record.event === "quarantine.index-recovered"), true);
+});
+
+test("quarantine discovers encrypted containers when all index metadata is lost", async () => {
+  const root = await sandbox("quarantine-orphan-recovery");
+  const source = path.join(root, "orphan.bin");
+  await fs.writeFile(source, "orphaned encrypted item");
+  const item = await quarantineFile(source);
+  const quarantine = path.join(process.env.SENTRYLOOM_DATA_DIR, "quarantine");
+  await fs.rm(path.join(quarantine, "index.last-good.json"));
+  await fs.writeFile(path.join(quarantine, "index.json"), Buffer.from([0, 0, 0, 0, 1, 2, 3]));
+
+  const records = await listQuarantine();
+  const recovered = records.find((entry) => entry.id === item.id);
+  assert.equal(recovered.state, "orphaned");
+  assert.equal(recovered.metadataLost, true);
+  assert.equal(recovered.storedFile, item.storedFile);
+
+  await deleteQuarantine(item.id);
+  await assert.rejects(fs.access(path.join(quarantine, item.storedFile)));
 });
 
 test("detection events produce actionable quarantine notifications", () => {
@@ -603,6 +648,7 @@ test("managed client replaces a preserved HQ target, encrypts enrollment, and ex
       updatedAt: new Date().toISOString()
     }));
     assert.equal((await loadHqCredentials()).serverUrl, "http://192.168.1.9:8443");
+    await saveThreatCredentials({ abuseChAuthKey: "legacy-local-auth-key-123456" });
     const identity = await probeHq(`http://127.0.0.1:${address.port}`, { allowHttp: true });
     assert.equal(identity.hqName, "Test HQ");
     const pending = await requestHqEnrollment({
@@ -613,6 +659,11 @@ test("managed client replaces a preserved HQ target, encrypts enrollment, and ex
       await loadHqCredentials(),
       null,
       "the newly requested HQ must replace preserved credentials for a previous server"
+    );
+    assert.deepEqual(
+      await loadThreatCredentials(),
+      {},
+      "managed enrollment must remove any locally stored abuse.ch key"
     );
     assert.equal(pending.serverUrl, `http://127.0.0.1:${address.port}`);
     await assert.rejects(fs.stat(oldConnectorState), { code: "ENOENT" });
@@ -643,8 +694,9 @@ test("managed client replaces a preserved HQ target, encrypts enrollment, and ex
     });
     connector.running = true;
     await connector.pulse();
-    assert.equal(connector.status().hqVersion, "0.4.3");
+    assert.equal(connector.status().hqVersion, "0.4.4");
     assert.equal(connector.status().maintenanceAuthorizationSupported, true);
+    assert.equal(connector.status().abuseChGatewayConfigured, false);
     for (let attempt = 0; attempt < 20 &&
          store.listCommands(credentials.deviceId)[0].status !== "completed"; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 25));
@@ -809,6 +861,11 @@ test("dashboard requires a launch session and CSRF for writes", async () => {
       workerPid: 101,
       updatedAt: new Date(Date.now() + 60000).toISOString()
     })
+  );
+  await fs.mkdir(path.join(root, "data", "quarantine"), { recursive: true });
+  await fs.writeFile(
+    path.join(root, "data", "quarantine", "index.json"),
+    Buffer.alloc(128)
   );
   const dashboard = createDashboardServer(engine);
   const address = await dashboard.listen("127.0.0.1", 0);
@@ -1075,6 +1132,50 @@ test("abuse.ch credential is encrypted at rest", async () => {
   assert.equal((await loadThreatCredentials()).abuseChAuthKey, key);
   const encrypted = await fs.readFile(path.join(process.env.SENTRYLOOM_DATA_DIR, "keys", "threat-credentials.enc"));
   assert.equal(encrypted.includes(Buffer.from(key)), false);
+});
+
+test("managed clients update authenticated abuse.ch feeds through HQ without a local key", async () => {
+  await sandbox("hq-threat-gateway");
+  let requestedSource = null;
+  const result = await updateThreatFeeds({
+    sources: ["malwarebazaar"],
+    config: { requestTimeoutMs: 10000, minimumUpdateIntervalMinutes: 0 },
+    credentials: {},
+    hqCredentials: {
+      serverUrl: "https://hq.example.test:8443",
+      fingerprint256: "A".repeat(64),
+      deviceId: crypto.randomUUID(),
+      token: "t".repeat(48)
+    },
+    hqFetchImpl: async (unusedCredentials, source) => {
+      requestedSource = source;
+      return {
+        query_status: "ok",
+        data: [{
+          sha256_hash: "a".repeat(64),
+          sha1_hash: "b".repeat(40),
+          md5_hash: "c".repeat(32),
+          file_size: 1234,
+          signature: "UnitGateway"
+        }]
+      };
+    },
+    force: true
+  });
+  assert.equal(requestedSource, "malwarebazaar");
+  assert.equal(result.results[0].ok, true);
+  assert.equal(result.results[0].imported, 3);
+  assert.deepEqual(await loadThreatCredentials(), {});
+});
+
+test("managed client UI identifies server-maintained abuse.ch access", async () => {
+  const [html, app] = await Promise.all([
+    fs.readFile(path.join("src", "ui", "index.html"), "utf8"),
+    fs.readFile(path.join("src", "ui", "app.js"), "utf8")
+  ]);
+  assert.match(html, /id="abuse-auth-key-state"/);
+  assert.match(app, /Auth-Key is added and maintained by SentryLoom HQ/);
+  assert.match(app, /key is never sent to or stored on this client/);
 });
 
 test("provider rate limits skip without degrading a healthy feed state", async () => {

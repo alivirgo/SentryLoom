@@ -19,7 +19,7 @@ const iterations = 310000;
 const base = path.dirname(configPath);
 await fs.mkdir(base, { recursive: true });
 const config = {
-  schemaVersion: 3,
+  schemaVersion: 4,
   hqName: process.env.SENTRYLOOM_HQ_NAME || "SentryLoom HQ",
   host: "0.0.0.0",
   port: Number(process.env.SENTRYLOOM_HQ_PORT) || 8443,
@@ -45,6 +45,9 @@ const config = {
   maintenance: {
     defaultMinutes: 10,
     defaultUses: 1
+  },
+  secrets: {
+    path: "hq-secrets.json"
   },
   updates: {
     directory: "updates",

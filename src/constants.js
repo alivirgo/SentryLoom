@@ -2,7 +2,7 @@ import os from "node:os";
 import path from "node:path";
 
 export const APP_NAME = "SentryLoom Endpoint Security";
-export const APP_VERSION = "0.16.6";
+export const APP_VERSION = "0.16.8";
 
 export function dataDirectory() {
   if (process.env.SENTRYLOOM_DATA_DIR) return path.resolve(process.env.SENTRYLOOM_DATA_DIR);
@@ -22,6 +22,8 @@ export function appPaths() {
     masterKey: path.join(data, "keys", "master.key"),
     quarantine: path.join(data, "quarantine"),
     quarantineIndex: path.join(data, "quarantine", "index.json"),
+    quarantineIndexBackup: path.join(data, "quarantine", "index.last-good.json"),
+    quarantineIndexLock: path.join(data, "quarantine", "index.lock"),
     logs: path.join(data, "logs"),
     auditLog: path.join(data, "logs", "audit.jsonl"),
     scanHistory: path.join(data, "scan-history.json"),

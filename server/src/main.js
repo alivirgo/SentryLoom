@@ -30,6 +30,9 @@ if (JSON.stringify(JSON.parse(storedConfigText)) !== JSON.stringify(config)) {
 }
 config.databasePath = path.resolve(base, config.databasePath);
 config.tls.pfxPath = path.resolve(base, config.tls.pfxPath);
+config.secrets = {
+  path: path.resolve(base, config.secrets?.path || "hq-secrets.json")
+};
 config.updates = {
   directory: path.resolve(base, config.updates?.directory || "updates"),
   stagingDirectory: config.updates?.stagingDirectory || "Z:\\Extreme Control\\SentryLoom Updates",
