@@ -8,11 +8,13 @@ import { createReadStream } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { HqStore, verifyAdminPassword } from "./store.js";
 import { compareVersions, UpdateService } from "./update-service.js";
+import { wakeDevice } from "./wake-on-lan.js";
 
 const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 const publicDirectory = path.resolve(moduleDirectory, "..", "public");
 const DISCOVERY_REQUEST = "SENTRYLOOM_HQ_DISCOVER_V1";
-const HQ_VERSION = "0.4.2";
+const HQ_VERSION = "0.4.3";
+const DEFAULT_UPDATE_STAGING = "Z:\\Extreme Control\\SentryLoom Updates";
 const HQ_CAPABILITIES = Object.freeze([
   "maintenance-authorization-v1",
   "maintenance-request-v1"
@@ -83,8 +85,17 @@ function selected(value, allowed, fallback) {
   return allowed.includes(numeric) ? numeric : fallback;
 }
 
+function stagingDirectory(value, fallback = DEFAULT_UPDATE_STAGING) {
+  const candidate = String(value || fallback).trim();
+  if (!candidate || candidate.length > 1024 ||
+      (!path.isAbsolute(candidate) && !path.win32.isAbsolute(candidate))) {
+    throw new Error("The update staging folder must be an absolute local or UNC path");
+  }
+  return candidate;
+}
+
 export function applyHqSettings(config, update = {}) {
-  config.schemaVersion = Math.max(2, Number(config.schemaVersion) || 1);
+  config.schemaVersion = Math.max(3, Number(config.schemaVersion) || 1);
   config.telemetryRetentionDays = selected(
     update.telemetryRetentionDays ?? config.telemetryRetentionDays,
     SETTING_OPTIONS.retentionDays,
@@ -126,6 +137,9 @@ export function applyHqSettings(config, update = {}) {
   };
   config.updates = {
     ...config.updates,
+    stagingDirectory: stagingDirectory(
+      update.stagingDirectory ?? config.updates?.stagingDirectory
+    ),
     autoDeploy: update.autoDeploy === undefined
       ? Boolean(config.updates?.autoDeploy)
       : Boolean(update.autoDeploy)
@@ -142,6 +156,7 @@ export function publicHqSettings(config) {
     maxLoginAttempts: config.admin.maxLoginAttempts,
     maintenanceMinutes: config.maintenance.defaultMinutes,
     maintenanceUses: config.maintenance.defaultUses,
+    stagingDirectory: config.updates.stagingDirectory,
     autoDeploy: Boolean(config.updates.autoDeploy),
     allowed: SETTING_OPTIONS
   };
@@ -289,6 +304,7 @@ export async function createHqServer(config, options = {}) {
     current.maintenance = { ...(current.maintenance || {}), ...config.maintenance };
     current.updates = {
       ...(current.updates || {}),
+      stagingDirectory: config.updates.stagingDirectory,
       autoDeploy: Boolean(config.updates.autoDeploy)
     };
     const temporary = `${options.configPath}.${process.pid}.${crypto.randomBytes(6).toString("hex")}.tmp`;
@@ -309,6 +325,27 @@ export async function createHqServer(config, options = {}) {
     const authorization = request.headers.authorization || "";
     const token = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
     return store.authenticateDevice(request.headers["x-sentryloom-device"], token);
+  }
+
+  function queueClientUpdate(update) {
+    const commands = store.listDevices()
+      .filter((device) =>
+        !device.revokedAt &&
+        compareVersions(
+          update.version,
+          device.status?.device?.appVersion || device.appVersion
+        ) > 0
+      )
+      .map((device) => store.ensureCommand(
+        device.id,
+        "client.update",
+        { version: update.version }
+      ));
+    return {
+      version: update.version,
+      queued: commands.filter((command) => !command.deduplicated).length,
+      alreadyQueued: commands.filter((command) => command.deduplicated).length
+    };
   }
 
   async function handler(request, response) {
@@ -624,7 +661,8 @@ export async function createHqServer(config, options = {}) {
         if (request.method === "GET" && url.pathname === "/api/admin/update") {
           sendJson(response, 200, {
             update: updateService.publicManifest(await updateService.latest()),
-            autoDeploy: Boolean(config.updates?.autoDeploy)
+            autoDeploy: Boolean(config.updates?.autoDeploy),
+            staging: await updateService.stagingStatus(config.updates.stagingDirectory)
           });
           return;
         }
@@ -724,13 +762,17 @@ export async function createHqServer(config, options = {}) {
             sendJson(response, 409, { error: "No signed client update is published" });
             return;
           }
-          const commands = store.listDevices()
-            .filter((device) => !device.revokedAt && compareVersions(update.version, device.status?.device?.appVersion || device.appVersion) > 0)
-            .map((device) => store.ensureCommand(device.id, "client.update", { version: update.version }));
+          sendJson(response, 202, queueClientUpdate(update));
+          return;
+        }
+        if (request.method === "POST" && url.pathname === "/api/admin/update/publish-latest") {
+          const published = await updateService.publishLatest(config.updates.stagingDirectory, {
+            releaseNotes: "Published from the configured HQ staging folder"
+          });
           sendJson(response, 202, {
-            version: update.version,
-            queued: commands.filter((command) => !command.deduplicated).length,
-            alreadyQueued: commands.filter((command) => command.deduplicated).length
+            update: updateService.publicManifest(published),
+            sourceFile: published.sourceFile,
+            deployment: queueClientUpdate(published)
           });
           return;
         }
@@ -786,6 +828,16 @@ export async function createHqServer(config, options = {}) {
             return;
           }
           sendJson(response, 201, store.createCommand(commandMatch[1], body.type, body.payload));
+          return;
+        }
+        const wakeMatch = url.pathname.match(/^\/api\/admin\/devices\/([a-f0-9-]{36})\/wake$/i);
+        if (wakeMatch && request.method === "POST") {
+          const device = store.getDevice(wakeMatch[1]);
+          if (!device || device.revokedAt) {
+            sendJson(response, 404, { error: "Managed device was not found" });
+            return;
+          }
+          sendJson(response, 202, await wakeDevice(device));
           return;
         }
         const revokeMatch = url.pathname.match(/^\/api\/admin\/devices\/([a-f0-9-]{36})\/revoke$/i);

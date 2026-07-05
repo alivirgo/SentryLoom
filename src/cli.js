@@ -13,9 +13,11 @@ import { validDashboardPage } from "./lib/ui-command.js";
 import {
   enrollWithHq,
   discoverHqServers,
+  normalizeHqUrl,
   probeHq,
   requestHqEnrollment
 } from "./lib/hq-client.js";
+import { loadHqCredentials } from "./lib/hq-credential-store.js";
 
 const args = process.argv.slice(2);
 const command = args.shift() || "help";
@@ -176,6 +178,7 @@ async function protection() {
     return enriched;
   };
   await engine.startProtection(targets);
+  await engine.startManagement();
   const status = await engine.getStatus();
   console.log(`Realtime file protection active for: ${status.protection.file.targets.join(", ")}`);
   console.log(`Network connection monitoring: ${status.protection.network.running ? "active" : "inactive"} (packet inspection: no)`);
@@ -293,12 +296,46 @@ async function main() {
         await engine.updateConfig({ management: { enabled: true } });
         console.log(`Enrolled with ${credentials.hqName}`);
       } else if (action === "request-env") {
+        const serverUrl = process.env.SENTRYLOOM_HQ_URL || undefined;
+        const resultFile = process.env.SENTRYLOOM_HQ_RESULT_FILE;
+        const existing = await loadHqCredentials();
+        const engine = await new AntivirusEngine().initialize();
+        if (existing) {
+          const requested = serverUrl
+            ? normalizeHqUrl(serverUrl, {
+                allowHttp: process.env.SENTRYLOOM_ALLOW_INSECURE_HQ === "1"
+              })
+            : existing.serverUrl;
+          if (requested !== existing.serverUrl) {
+            throw new Error(
+              "This endpoint is already enrolled. Change HQ from client Settings with a current maintenance password."
+            );
+          }
+          await engine.updateConfig({ management: { enabled: true } });
+          if (resultFile) {
+            fs.writeFileSync(resultFile, JSON.stringify({
+              status: "preserved",
+              hqName: existing.hqName,
+              serverUrl: existing.serverUrl,
+              deviceId: existing.deviceId
+            }), { encoding: "utf8", mode: 0o600, flag: "w" });
+          }
+          console.log(`Existing enrollment with ${existing.hqName} preserved`);
+          break;
+        }
         const pending = await requestHqEnrollment({
-          serverUrl: process.env.SENTRYLOOM_HQ_URL || undefined,
+          serverUrl,
           fingerprint256: process.env.SENTRYLOOM_HQ_FINGERPRINT || undefined
         });
-        const engine = await new AntivirusEngine().initialize();
         await engine.updateConfig({ management: { enabled: true } });
+        if (resultFile) {
+          fs.writeFileSync(resultFile, JSON.stringify({
+            status: "requested",
+            hqName: pending.hqName,
+            serverUrl: pending.serverUrl,
+            requestId: pending.requestId
+          }), { encoding: "utf8", mode: 0o600, flag: "w" });
+        }
         console.log(`Enrollment approval requested from ${pending.hqName}`);
       } else if (action === "maintenance-authorize-env") {
         const password = process.env.SENTRYLOOM_MAINTENANCE_PASSWORD;

@@ -7,7 +7,7 @@ param(
     [string]$ResultPath,
     [string]$AdminPasswordFile,
     [string]$InstallLogPath,
-    [string]$TargetVersion = '0.4.2'
+    [string]$TargetVersion = '0.4.3'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -120,6 +120,34 @@ try {
     }
 
     $Config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
+    $StagingDirectory = if ($Config.updates.stagingDirectory) {
+        [string]$Config.updates.stagingDirectory
+    } else {
+        'Z:\Extreme Control\SentryLoom Updates'
+    }
+    $StagingDrive = if ($StagingDirectory -match '^([A-Za-z]):\\') {
+        Get-PSDrive -Name $Matches[1] -PSProvider FileSystem -ErrorAction SilentlyContinue
+    } else {
+        $null
+    }
+    $NetworkStaging = $StagingDirectory.StartsWith('\\') -or
+        -not [string]::IsNullOrWhiteSpace([string]$StagingDrive.DisplayRoot)
+    if (Test-Path -LiteralPath $StagingDirectory -PathType Container) {
+        if ($NetworkStaging) {
+            Write-InstallStep 'The update staging folder is a mapped/network share. Configure its UNC path in HQ and grant share plus NTFS read access to this HQ computer account.'
+        } else {
+            & "$env:WINDIR\System32\icacls.exe" `
+                $StagingDirectory `
+                '/grant' `
+                '*S-1-5-18:(OI)(CI)RX' | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                throw "Could not grant the HQ SYSTEM task read access to update staging: $StagingDirectory"
+            }
+            Write-InstallStep "Granted the HQ SYSTEM task read access to update staging: $StagingDirectory"
+        }
+    } else {
+        Write-InstallStep "Update staging is not currently visible to Setup: $StagingDirectory"
+    }
     $Main = Join-Path $PSScriptRoot 'src\main.js'
     $Action = New-ScheduledTaskAction `
         -Execute $Node `
@@ -204,6 +232,14 @@ try {
             Protocol = 'UDP'
             LocalPort = $DiscoveryPort
             RemotePort = 'Any'
+        },
+        @{
+            Name = 'SentryLoom-HQ-Wake-On-LAN-Out'
+            DisplayName = 'SentryLoom HQ - Wake-on-LAN outbound'
+            Direction = 'Outbound'
+            Protocol = 'UDP'
+            LocalPort = 'Any'
+            RemotePort = 9
         }
     )
     foreach ($Rule in $FirewallRules) {

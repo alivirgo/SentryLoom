@@ -247,10 +247,14 @@ td.path { font-family: "Cascadia Mono", Consolas, monospace; color: var(--muted-
 .hq-actions { display: flex; align-items: center; gap: 9px; margin-top: 14px; }
 .hq-actions select { min-width: 280px; max-width: 100%; }
 .hq-enrollment .hq-actions { grid-column: 2; margin-top: 6px; }
+.hq-form-state { grid-column: 2; color: var(--muted); line-height: 1.45; }
 .hq-maintenance { display: grid; grid-template-columns: minmax(170px, 220px) minmax(0, 1fr); gap: 9px 14px; align-items: center; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
 .hq-maintenance .field-label { margin: 0; }
-.hq-maintenance button, .hq-maintenance small { grid-column: 2; }
+.hq-maintenance-actions { grid-column: 2; display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.hq-maintenance small { grid-column: 2; }
 .hq-maintenance small { color: var(--muted); line-height: 1.45; }
+.hq-maintenance small.ready { color: var(--green); }
+.hq-maintenance small.error { color: var(--red); }
 .monitoring-panel { margin-top: 16px; }
 .risk-toggle { border: 1px solid #6c542f; border-radius: var(--radius-md); padding: 14px 12px; margin: 12px 0; background: #211a11; }
 .monitoring-summary { color: var(--muted-strong); border: 1px solid var(--line); background: #0d1319; border-radius: var(--radius-md); padding: 12px 13px; margin: 15px 0; font: 10px/1.7 "Cascadia Mono", Consolas, monospace; }
@@ -378,8 +382,10 @@ html[data-theme="light"] #toast.error { color: #6f2424; border-color: #d49a9a; b
   .dns-actions { align-items: stretch; flex-direction: column; }
   .hq-enrollment { grid-template-columns: 1fr; }
   .hq-enrollment .hq-actions { grid-column: auto; }
+  .hq-form-state { grid-column: auto; }
   .hq-maintenance { grid-template-columns: 1fr; }
-  .hq-maintenance button, .hq-maintenance small { grid-column: auto; }
+  .hq-maintenance-actions, .hq-maintenance small { grid-column: auto; }
+  .hq-maintenance-actions { align-items: stretch; flex-direction: column; }
   .hq-actions { align-items: stretch; flex-direction: column; }
   .hq-actions select { min-width: 0; width: 100%; }
   .settings-access-summary { align-items: flex-start; flex-direction: column; }

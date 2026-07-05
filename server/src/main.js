@@ -32,6 +32,7 @@ config.databasePath = path.resolve(base, config.databasePath);
 config.tls.pfxPath = path.resolve(base, config.tls.pfxPath);
 config.updates = {
   directory: path.resolve(base, config.updates?.directory || "updates"),
+  stagingDirectory: config.updates?.stagingDirectory || "Z:\\Extreme Control\\SentryLoom Updates",
   autoDeploy: Boolean(config.updates?.autoDeploy)
 };
 

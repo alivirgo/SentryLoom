@@ -26,22 +26,22 @@ $NodeCandidate = Join-Path $env:ProgramFiles 'nodejs\node.exe'
 $Node = if (Test-Path -LiteralPath $NodeCandidate) { $NodeCandidate } else { (Get-Command node -ErrorAction Stop).Source }
 $Launcher = Join-Path $Root 'SentryLoom.exe'
 $Cli = Join-Path $Root 'src\cli.js'
+$MaintenanceAuthorizer = Join-Path $Root 'Authorize-SentryLoomMaintenance.ps1'
+$TamperHelper = Join-Path $Root 'Set-SentryLoomTamperProtection.ps1'
 $ClamScan = Join-Path $env:ProgramFiles 'ClamAV\clamscan.exe'
 $Identity = [Security.Principal.WindowsIdentity]::GetCurrent()
-$QualifiedUser = [string]$Identity.Name
-if ([string]::IsNullOrWhiteSpace($QualifiedUser) -or $QualifiedUser -notmatch '\\') {
-    throw "Windows did not provide a fully qualified account name for scheduled protection: '$QualifiedUser'"
-}
-$RunLevel = if ($SystemWideProtection) { 'Highest' } else { 'Limited' }
-$TaskPrincipal = New-ScheduledTaskPrincipal -UserId $QualifiedUser -LogonType Interactive -RunLevel $RunLevel
+$TaskPrincipal = New-ScheduledTaskPrincipal `
+    -UserId 'SYSTEM' `
+    -LogonType ServiceAccount `
+    -RunLevel Highest
 
 if (-not (Test-Path -LiteralPath $Launcher)) {
     throw "The native SentryLoom launcher is missing: $Launcher"
 }
 Write-RegistrationStep "Validated the launcher and runtime paths."
 
-$Programs = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'
-$Desktop = [Environment]::GetFolderPath('Desktop')
+$Programs = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs'
+$Desktop = [Environment]::GetFolderPath('CommonDesktopDirectory')
 $Shell = New-Object -ComObject WScript.Shell
 
 foreach ($LegacyTask in @('Aegis Offline AV - Daily Quick Scan', 'Aegis Offline AV - Realtime Protection')) {
@@ -67,6 +67,14 @@ foreach ($LinkPath in @(
     $Shortcut.Description = 'SentryLoom Endpoint Security console'
     $Shortcut.Save()
 }
+$MaintenanceLink = Join-Path $Programs 'Authorize SentryLoom File Maintenance.lnk'
+$MaintenanceShortcut = $Shell.CreateShortcut($MaintenanceLink)
+$MaintenanceShortcut.TargetPath = (Get-Process -Id $PID -ErrorAction Stop).Path
+$MaintenanceShortcut.Arguments = "-NoLogo -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$MaintenanceAuthorizer`" -Action file-maintenance"
+$MaintenanceShortcut.WorkingDirectory = $Root
+$MaintenanceShortcut.IconLocation = "$Launcher,0"
+$MaintenanceShortcut.Description = 'Temporarily unlock SentryLoom files with an HQ maintenance password'
+$MaintenanceShortcut.Save()
 Write-RegistrationStep 'Created the Start Menu and Desktop application shortcuts.'
 
 if (-not $SkipScheduledScans) {
@@ -98,7 +106,7 @@ if (-not $SkipRealtimeStartup) {
     Stop-ScheduledTask -TaskName 'SentryLoom - Realtime Protection' -ErrorAction SilentlyContinue
     Unregister-ScheduledTask -TaskName 'SentryLoom - Realtime Protection' -Confirm:$false -ErrorAction SilentlyContinue
     $Action = New-ScheduledTaskAction -Execute $Launcher -Argument '--background' -WorkingDirectory $Root
-    $Trigger = New-ScheduledTaskTrigger -AtLogOn -User $QualifiedUser
+    $Trigger = New-ScheduledTaskTrigger -AtStartup
     $Settings = New-ScheduledTaskSettingsSet `
         -StartWhenAvailable `
         -MultipleInstances IgnoreNew `
@@ -109,8 +117,33 @@ if (-not $SkipRealtimeStartup) {
         -DontStopIfGoingOnBatteries
     Register-ScheduledTask -TaskName 'SentryLoom - Realtime Protection' -Action $Action -Trigger $Trigger -Settings $Settings -Principal $TaskPrincipal -Description 'SentryLoom realtime endpoint protection' -Force | Out-Null
     Start-ScheduledTask -TaskName 'SentryLoom - Realtime Protection'
-    Write-RegistrationStep 'Registered and started self-restarting realtime protection.'
+    $RunKey = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Run'
+    New-Item -Path $RunKey -Force | Out-Null
+    New-ItemProperty `
+        -Path $RunKey `
+        -Name 'SentryLoom Tray' `
+        -Value ('"{0}" --tray' -f $Launcher) `
+        -PropertyType String `
+        -Force | Out-Null
+    Write-RegistrationStep 'Registered startup-resilient machine protection and the interactive tray icon.'
 }
+
+Write-RegistrationStep 'Enabling Wake-on-LAN magic-packet support on compatible physical adapters.'
+$WakeAdapters = @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object Status -ne 'Disabled')
+$WakeEnabled = 0
+foreach ($Adapter in $WakeAdapters) {
+    try {
+        Set-NetAdapterPowerManagement `
+            -Name $Adapter.Name `
+            -WakeOnMagicPacket Enabled `
+            -NoRestart `
+            -ErrorAction Stop
+        $WakeEnabled += 1
+    } catch {
+        Write-Warning "Wake-on-LAN could not be enabled for '$($Adapter.Name)': $($_.Exception.Message)"
+    }
+}
+Write-RegistrationStep "Wake-on-LAN was configured on $WakeEnabled compatible adapter(s); firmware support may still be required."
 
 Write-RegistrationStep 'Configuring application-scoped Windows Firewall policies.'
 Remove-NetFirewallRule -Group 'SentryLoom Endpoint' -ErrorAction SilentlyContinue
@@ -151,9 +184,16 @@ if ($InvalidFirewallRule) {
 }
 Write-RegistrationStep 'Verified endpoint firewall policies for HQ discovery and HTTPS communication.'
 
+if (-not (Test-Path -LiteralPath $TamperHelper -PathType Leaf)) {
+    throw "The SentryLoom tamper-protection helper is missing: $TamperHelper"
+}
+Write-RegistrationStep 'Applying installation-directory tamper protection.'
+& $TamperHelper -Mode Apply -InstallRoot $Root
+Write-RegistrationStep 'Verified installation-directory tamper protection.'
+
 Write-Host 'SentryLoom Endpoint Security registered for the current user.' -ForegroundColor Green
 Write-Host "Application: $Root"
-Write-Host "Scheduled task identity: $QualifiedUser"
+Write-Host 'Scheduled task identity: NT AUTHORITY\SYSTEM'
 Write-Host 'Use the Desktop or Start Menu shortcut to launch the security console.'
 Write-Host "Realtime task privilege: $(if ($SystemWideProtection) { 'Highest' } else { 'Limited' })"
 Write-Host 'Firewall: application-scoped outbound HTTPS and LAN discovery rules are enabled.'

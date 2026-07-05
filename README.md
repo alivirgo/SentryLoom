@@ -80,6 +80,10 @@ Management and operations resources:
   preservation.
 - Ed25519-verified offline signature bundles.
 - AES-256-GCM encrypted endpoint credentials and per-device HQ credentials.
+- A `SYSTEM`-owned, read/execute-only installation tree that blocks direct
+  modification and deletion by users and administrators. Managed endpoints
+  require a current HQ maintenance password to open a five-minute maintenance
+  window; the permissions relock automatically.
 - Loopback-only local dashboard with launch tokens, HttpOnly sessions, CSRF
   protection, strict Content Security Policy, and no third-party UI assets.
 - Reversible Windows DNS-over-HTTPS profiles and USB storage policy controls.
@@ -115,6 +119,10 @@ terms.
   outages, and process restarts.
 - Signed update manifests bound to package hash, size, version, Authenticode
   certificate thumbprint, and certificate subject.
+- One-click publication of the newest signed Setup from a permission-checked
+  HQ staging folder, followed by unattended deployment to eligible clients.
+- Wake-on-LAN using client-reported physical MAC/subnet metadata and
+  LAN-scoped UDP magic packets.
 
 ## Architecture
 
@@ -256,12 +264,26 @@ immediately. An endpoint may alternatively request approval while an
 administrator is online; that request expires after 20 seconds and its
 one-time password is RSA-encrypted for the requesting endpoint.
 
+The supported uninstaller requests that password before it unlocks the
+installation tree. For manual file maintenance, open **Authorize SentryLoom
+File Maintenance** from the Start Menu, approve UAC, and enter a current
+maintenance password. Windows Explorer blocks direct deletion with an access
+denied message; Windows cannot replace that message with SentryLoom's password
+dialog without a signed filesystem minifilter driver.
+
 Setup upgrades preserve endpoint and HQ operational state. Before replacing
 application files, Setup creates an administrator-only backup of settings,
 encrypted credentials, enrollment, quarantine, logs, history, threat data,
 certificates, databases, updates, and policy metadata. Runtime configuration
 uses versioned schema migrations that retain existing values and add only new
 defaults unless a release explicitly documents a changed field.
+
+Endpoint state is shared machine-wide at `%ProgramData%\SentryLoom`. Setup
+migrates legacy per-user state from the installing administrator or active
+desktop user so the background agent, tray, and GUI keep one device identity
+and one HQ enrollment. Resident protection starts at Windows startup under the
+machine account; the notification-area icon runs separately in the interactive
+desktop session.
 
 When Setup successfully submits an enrollment request to an explicitly entered
 HQ URL, that server becomes the new management target. Preserved credentials

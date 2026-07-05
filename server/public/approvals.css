@@ -54,11 +54,16 @@
 .server-settings-panel { margin-bottom: 14px; }
 .server-settings-grid { display: grid; grid-template-columns: repeat(3, minmax(180px, 1fr)); gap: 14px; padding: 16px 0; }
 .server-settings-grid label { display: grid; gap: 6px; color: #35444e; font-size: 12px; font-weight: 600; }
-.server-settings-grid select { width: 100%; padding: 9px; border: 1px solid #ccd5dc; border-radius: 5px; background: #fff; }
+.server-settings-grid select, .server-settings-grid input[type="text"], .server-settings-grid input:not([type]) { width: 100%; padding: 9px; border: 1px solid #ccd5dc; border-radius: 5px; background: #fff; }
 .server-settings-grid small { color: #78858e; font-size: 10px; font-weight: 400; line-height: 1.4; }
 .server-setting-toggle { grid-column: 1 / -1; grid-template-columns: auto 1fr !important; align-items: center; padding: 12px; border: 1px solid #dbe2e7; border-radius: 6px; }
 .server-setting-toggle span strong, .server-setting-toggle span small { display: block; }
+.server-setting-wide { grid-column: 1 / -1; }
+.server-setting-wide small.ready { color: #126e60; }
+.server-setting-wide small.error { color: #a43e3e; }
 .server-settings-actions { display: flex; align-items: center; gap: 12px; }
+.server-settings-actions > button:not(.primary) { border: 1px solid #9bb8b1; border-radius: 6px; background: #fff; color: #126e60; padding: 9px 14px; font-weight: 650; cursor: pointer; }
+.server-settings-actions > button:disabled { opacity: .55; cursor: wait; }
 .server-settings-actions span { color: #78858e; font-size: 10px; }
 .maintenance-generator { display: grid; grid-template-columns: minmax(220px, 1fr) 130px 120px auto; gap: 12px; align-items: end; padding: 16px 0; }
 .maintenance-generator strong, .maintenance-generator small, .maintenance-generator label { display: block; }

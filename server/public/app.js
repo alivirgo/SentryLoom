@@ -1,7 +1,7 @@
 let csrf = "";
 let devices = [];
 let enrollmentRequests = [];
-let updateState = { update: null, autoDeploy: false };
+let updateState = { update: null, autoDeploy: false, staging: null };
 let maintenanceState = { passwords: [], requests: [] };
 let serverSettings = null;
 let serverSettingsDirty = false;
@@ -387,7 +387,17 @@ function renderServerSettings(settings) {
   $("#setting-login-attempts").value = String(settings.maxLoginAttempts);
   $("#setting-maintenance-minutes").value = String(settings.maintenanceMinutes);
   $("#setting-maintenance-uses").value = String(settings.maintenanceUses);
+  $("#setting-staging-directory").value = settings.stagingDirectory || "";
   $("#setting-auto-deploy").checked = Boolean(settings.autoDeploy);
+  const staging = updateState.staging;
+  const stagingState = $("#update-staging-state");
+  stagingState.className = staging?.accessible ? "ready" : staging ? "error" : "";
+  stagingState.textContent = staging?.accessible
+    ? staging.latest
+      ? `Accessible to HQ · newest file: ${staging.latest.fileName}`
+      : "Accessible to HQ · no SentryLoom Setup file found"
+    : staging?.error ||
+      "HQ checks this folder using its SYSTEM service identity. Use a UNC path for network shares.";
   if (!serverSettingsRendered) {
     $("#maintenance-minutes").value = String(settings.maintenanceMinutes);
     $("#maintenance-uses").value = String(settings.maintenanceUses);
@@ -482,6 +492,7 @@ $("#save-server-settings").addEventListener("click", async () => {
         maxLoginAttempts: Number($("#setting-login-attempts").value),
         maintenanceMinutes: Number($("#setting-maintenance-minutes").value),
         maintenanceUses: Number($("#setting-maintenance-uses").value),
+        stagingDirectory: $("#setting-staging-directory").value.trim(),
         autoDeploy: $("#setting-auto-deploy").checked
       })
     });
@@ -495,6 +506,33 @@ $("#save-server-settings").addEventListener("click", async () => {
       `Saved · ${result.settings.telemetryRetentionDays}-day retention · ${deleted} expired record(s) removed`;
     toast("HQ server settings saved");
     renderUpdateRelease();
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$("#publish-staged-update").addEventListener("click", async () => {
+  const button = $("#publish-staged-update");
+  if (serverSettingsDirty) {
+    toast("Save the staging-folder setting before publishing");
+    return;
+  }
+  if (!window.confirm(
+    "Validate the newest staged SentryLoom Setup, publish it, and queue it for every eligible managed endpoint?"
+  )) return;
+  try {
+    button.disabled = true;
+    const result = await api("/api/admin/update/publish-latest", {
+      method: "POST",
+      body: "{}"
+    });
+    toast(
+      `Published ${result.update.version}: ${result.deployment.queued} queued, ` +
+      `${result.deployment.alreadyQueued} already pending`
+    );
+    await refresh();
   } catch (error) {
     toast(error.message);
   } finally {
@@ -593,6 +631,26 @@ $("#devices").addEventListener("click", async (event) => {
 });
 
 $("#device-dialog").addEventListener("click", async (event) => {
+  const wakeButton = event.target.closest("[data-wake]");
+  if (wakeButton && selectedDeviceId) {
+    const device = devices.find((item) => item.id === selectedDeviceId);
+    if (!window.confirm(
+      `Send a Wake-on-LAN magic packet to ${device?.name || "this endpoint"}?`
+    )) return;
+    try {
+      wakeButton.disabled = true;
+      const result = await api(`/api/admin/devices/${selectedDeviceId}/wake`, {
+        method: "POST",
+        body: "{}"
+      });
+      toast(`Sent ${result.packetsSent} Wake-on-LAN packet(s) to ${device?.name || "endpoint"}`);
+    } catch (error) {
+      toast(error.message);
+    } finally {
+      wakeButton.disabled = false;
+    }
+    return;
+  }
   const button = event.target.closest("[data-command]");
   const type = button?.dataset.command;
   if (!type || !selectedDeviceId) return;

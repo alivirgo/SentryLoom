@@ -18,6 +18,13 @@ import {
   downloadHqPackage,
   requestHqMaintenancePassword
 } from "../../src/lib/hq-client.js";
+import { collectWakeNetworkInterfaces } from "../../src/lib/network-identity.js";
+import { UpdateService, latestStagedSetup } from "../src/update-service.js";
+import {
+  createMagicPacket,
+  ipv4BroadcastAddress,
+  wakeDevice
+} from "../src/wake-on-lan.js";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -127,13 +134,14 @@ test("HQ settings expose only discrete safe values and preserve secret admin fie
   assert.equal(config.admin.passwordHash, "secret-hash");
   assert.equal(config.admin.salt, "secret-salt");
   assert.deepEqual(publicHqSettings(config), {
-    schemaVersion: 2,
+    schemaVersion: 3,
     telemetryRetentionDays: 365,
     offlineAfterSeconds: 300,
     sessionHours: 8,
     maxLoginAttempts: 5,
     maintenanceMinutes: 30,
     maintenanceUses: 3,
+    stagingDirectory: "Z:\\Extreme Control\\SentryLoom Updates",
     autoDeploy: true,
     allowed: {
       retentionDays: [30, 90, 365],
@@ -144,6 +152,94 @@ test("HQ settings expose only discrete safe values and preserve secret admin fie
       maintenanceUses: [1, 3, 10]
     }
   });
+});
+
+test("HQ publishes the highest signed staged client version atomically", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "sentryloom-hq-staging-"));
+  const staging = path.join(root, "staging");
+  const repository = path.join(root, "repository");
+  await fs.mkdir(staging, { recursive: true });
+  await fs.writeFile(path.join(staging, "SentryLoom-Setup-1.9.9.exe"), Buffer.alloc(4096, 1));
+  await fs.writeFile(path.join(staging, "SentryLoom-Setup-2.0.0.exe"), Buffer.alloc(8192, 2));
+  await fs.writeFile(path.join(staging, "notes.txt"), "ignored");
+  try {
+    const newest = await latestStagedSetup(staging);
+    assert.equal(newest.version, "2.0.0");
+    const service = new UpdateService(repository);
+    const published = await service.publishLatest(staging, {
+      inspect: async () => ({
+        version: "2.0.0",
+        status: "Valid",
+        thumbprint: "A".repeat(40),
+        subject: "CN=NUC7 Studios"
+      }),
+      releaseNotes: "Automated staging test"
+    });
+    assert.equal(published.version, "2.0.0");
+    assert.equal(published.fileName, "SentryLoom-Setup-2.0.0.exe");
+    assert.equal(published.size, 8192);
+    assert.equal((await service.latest()).sha256, published.sha256);
+    assert.equal((await service.stagingStatus(staging)).latest.version, "2.0.0");
+    assert.equal("sourceFile" in service.publicManifest(published), false);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("Wake-on-LAN uses sanitized client MAC and subnet telemetry", async () => {
+  const interfaces = collectWakeNetworkInterfaces({
+    Ethernet: [{
+      address: "192.168.50.27",
+      netmask: "255.255.255.0",
+      family: "IPv4",
+      mac: "AA:BB:CC:DD:EE:FF",
+      internal: false
+    }],
+    Loopback: [{
+      address: "127.0.0.1",
+      netmask: "255.0.0.0",
+      family: "IPv4",
+      mac: "00:00:00:00:00:00",
+      internal: true
+    }]
+  });
+  assert.deepEqual(interfaces, [{
+    name: "Ethernet",
+    address: "192.168.50.27",
+    netmask: "255.255.255.0",
+    mac: "aa:bb:cc:dd:ee:ff"
+  }]);
+  assert.equal(ipv4BroadcastAddress("192.168.50.27", "255.255.255.0"), "192.168.50.255");
+  const packet = createMagicPacket("aa:bb:cc:dd:ee:ff");
+  assert.equal(packet.length, 102);
+  assert.equal(packet.subarray(0, 6).equals(Buffer.alloc(6, 0xff)), true);
+
+  const sends = [];
+  const result = await wakeDevice({
+    id: crypto.randomUUID(),
+    name: "FIN-01",
+    status: { device: { networkInterfaces: interfaces } }
+  }, {
+    send: async (payload, broadcast, port) => sends.push({ payload, broadcast, port })
+  });
+  assert.equal(result.packetsSent, 3);
+  assert.equal(sends.every((item) =>
+    item.payload.length === 102 &&
+    item.broadcast === "192.168.50.255" &&
+    item.port === 9
+  ), true);
+});
+
+test("HQ UI exposes one-click staged publishing and Wake-on-LAN", async () => {
+  const [html, app] = await Promise.all([
+    fs.readFile(path.join(projectRoot, "server", "public", "index.html"), "utf8"),
+    fs.readFile(path.join(projectRoot, "server", "public", "app.js"), "utf8")
+  ]);
+  assert.match(html, /id="publish-staged-update"[^>]*>Publish latest and deploy/);
+  assert.match(html, /id="setting-staging-directory"/);
+  assert.match(html, /data-wake>Wake on LAN/);
+  assert.match(app, /\/api\/admin\/update\/publish-latest/);
+  assert.match(app, /\/api\/admin\/devices\/\$\{selectedDeviceId\}\/wake/);
 });
 
 test("HQ enrolls, authenticates telemetry, and delivers allowlisted commands", async () => {
@@ -234,7 +330,7 @@ test("HQ enrolls, authenticates telemetry, and delivers allowlisted commands", a
     });
     assert.equal(telemetryResponse.status, 202);
     const telemetryAcknowledgement = await telemetryResponse.json();
-    assert.equal(telemetryAcknowledgement.hq.version, "0.4.2");
+    assert.equal(telemetryAcknowledgement.hq.version, "0.4.3");
     assert.equal(
       telemetryAcknowledgement.hq.capabilities.includes("maintenance-authorization-v1"),
       true

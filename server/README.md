@@ -39,7 +39,7 @@ publish the signed Setup executable from an elevated HQ PowerShell session:
 
 ```powershell
 .\Publish-SentryLoomUpdate.ps1 `
-  -SetupFile C:\Releases\SentryLoom-Setup-0.16.3.exe `
+  -SetupFile C:\Releases\SentryLoom-Setup-0.16.6.exe `
   -ReleaseNotes 'Security engine and stability update'
 ```
 
@@ -57,9 +57,46 @@ To queue every newer signed release automatically, set
 `updates.autoDeploy` to `true` in `data\config.json` and restart HQ. Update
 commands remain allowlisted and cannot execute arbitrary commands.
 
+### One-click staging-folder deployment
+
+HQ server settings default the staging folder to:
+
+```text
+Z:\Extreme Control\SentryLoom Updates
+```
+
+Place signed packages there using the required
+`SentryLoom-Setup-x.y.z.exe` filename. The settings page reports whether the
+HQ `SYSTEM` task can read the folder and which semantic version is newest.
+Select **Publish latest and deploy** to validate the newest file's embedded
+version and Authenticode signature, copy it atomically into the HQ repository,
+write its SHA-256 manifest, and queue every eligible client.
+
+Drive mappings are session-specific. If `Z:` is a mapped network drive, use
+the share's UNC path in server settings, such as
+`\\fileserver\releases\SentryLoom Updates`. Grant both share and NTFS read
+permission to the HQ computer account (`DOMAIN\HQSERVER$`). Do not grant write
+access to HQ; the development/signing account should remain the only publisher
+that can place files in staging.
+
+For a local staging volume, Setup grants the HQ `SYSTEM` identity read and
+execute access when the folder already exists.
+
+## Wake-on-LAN
+
+Current clients report sanitized physical MAC, IPv4 address, and subnet
+metadata. Open an endpoint in HQ and select **Wake on LAN** to send three
+UDP/9 magic packets to each reported directed-broadcast address.
+
+Setup enables the required HQ outbound firewall rule and requests
+`WakeOnMagicPacket` on compatible client adapters. Wake-on-LAN must also be
+enabled in the endpoint firmware and NIC driver. Directed broadcasts normally
+work only on the same LAN/VLAN unless routers are explicitly configured to
+forward them.
+
 ## Initialize on the HQ Windows server
 
-Run `SentryLoom-HQ-Setup-0.4.2.exe` and provide the server's DNS/computer name.
+Run `SentryLoom-HQ-Setup-0.4.3.exe` and provide the server's DNS/computer name.
 Setup installs prerequisites, initializes new servers, preserves existing data
 during upgrades, registers the self-restarting startup task, and asks for the
 administrator password with confirmation. On upgrade, the entered password

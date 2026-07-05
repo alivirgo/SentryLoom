@@ -59,6 +59,7 @@ import {
 import { getDeviceIdentity } from "./device-identity.js";
 import { getClientUpdateStatus, stageClientUpdate } from "./client-update.js";
 import { readJson, writeJsonAtomic } from "./fs-safe.js";
+import { collectWakeNetworkInterfaces } from "./network-identity.js";
 
 const HQ_SENSITIVE_FIELD = /(?:password|secret|token|authkey|credential|masterkey|privatekey|controller)/i;
 
@@ -578,16 +579,24 @@ export class AntivirusEngine {
 
   async requestHqEnrollment(options = {}) {
     await this.stopManagement();
-    const pending = await requestHqEnrollment(options);
-    this.config = await saveConfig({ management: { enabled: true } });
-    await this.startManagement();
-    await appendAudit("hq.enrollment-requested", {
-      hqName: pending.hqName,
-      serverUrl: pending.serverUrl,
-      requestId: pending.requestId,
-      fingerprint256: pending.fingerprint256
-    });
-    return this.getHqStatus();
+    try {
+      const pending = await requestHqEnrollment(options);
+      this.config = await saveConfig({ management: { enabled: true } });
+      await this.startManagement();
+      await appendAudit("hq.enrollment-requested", {
+        hqName: pending.hqName,
+        serverUrl: pending.serverUrl,
+        requestId: pending.requestId,
+        fingerprint256: pending.fingerprint256
+      });
+      return this.getHqStatus();
+    } catch (error) {
+      // A typo, unreachable replacement server, or rejected certificate must
+      // not leave the current HQ connector stopped. Credentials are removed
+      // only after the new server accepts the enrollment request.
+      await this.startManagement().catch(() => {});
+      throw error;
+    }
   }
 
   async disconnectHq() {
@@ -663,7 +672,8 @@ export class AntivirusEngine {
         name: identity.name,
         hostname: identity.hostname,
         platform: identity.platform,
-        appVersion: APP_VERSION
+        appVersion: APP_VERSION,
+        networkInterfaces: collectWakeNetworkInterfaces()
       },
       security: {
         score: status.posture.score,

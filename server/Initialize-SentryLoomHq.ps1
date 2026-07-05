@@ -102,6 +102,7 @@ foreach ($Rule in @(
         Direction = 'Inbound'
         Protocol = 'TCP'
         LocalPort = $Port
+        RemotePort = 'Any'
     },
     @{
         Name = 'SentryLoom-HQ-Discovery-In'
@@ -109,6 +110,7 @@ foreach ($Rule in @(
         Direction = 'Inbound'
         Protocol = 'UDP'
         LocalPort = 32110
+        RemotePort = 'Any'
     },
     @{
         Name = 'SentryLoom-HQ-Discovery-Out'
@@ -116,6 +118,15 @@ foreach ($Rule in @(
         Direction = 'Outbound'
         Protocol = 'UDP'
         LocalPort = 32110
+        RemotePort = 'Any'
+    },
+    @{
+        Name = 'SentryLoom-HQ-Wake-On-LAN-Out'
+        DisplayName = 'SentryLoom HQ - Wake-on-LAN outbound'
+        Direction = 'Outbound'
+        Protocol = 'UDP'
+        LocalPort = 'Any'
+        RemotePort = 9
     }
 )) {
     New-NetFirewallRule `
@@ -126,6 +137,7 @@ foreach ($Rule in @(
         -Action Allow `
         -Protocol $Rule.Protocol `
         -LocalPort $Rule.LocalPort `
+        -RemotePort $Rule.RemotePort `
         -Profile Any `
         -RemoteAddress LocalSubnet | Out-Null
 }

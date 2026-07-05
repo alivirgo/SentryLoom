@@ -47,6 +47,7 @@ const { HqStore } = await import("../server/src/store.js");
 const { createHqServer } = await import("../server/src/server.js");
 const {
   acquireHqConnectorLease,
+  discoverHqServers,
   hqDiscoveryBroadcastAddresses,
   HqConnector,
   pollHqEnrollment,
@@ -57,6 +58,119 @@ const {
   loadHqCredentials,
   saveHqCredentials
 } = await import("../src/lib/hq-credential-store.js");
+
+test("Windows endpoint processes default to one machine-wide data directory", {
+  skip: process.platform !== "win32"
+}, () => {
+  const programData = path.join(os.tmpdir(), "sentryloom-program-data-contract");
+  const result = spawnSync(process.execPath, [
+    "--input-type=module",
+    "--eval",
+    "import { dataDirectory } from './src/constants.js'; process.stdout.write(dataDirectory());"
+  ], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      SENTRYLOOM_DATA_DIR: "",
+      PROGRAMDATA: programData
+    }
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, path.join(programData, "SentryLoom"));
+});
+
+test("Windows setup protects installed files behind bounded maintenance authorization", async () => {
+  const [
+    tamperScript,
+    authorizationScript,
+    registrationScript,
+    removalScript,
+    installer
+  ] = await Promise.all([
+    fs.readFile("Set-SentryLoomTamperProtection.ps1", "utf8"),
+    fs.readFile("Authorize-SentryLoomMaintenance.ps1", "utf8"),
+    fs.readFile("Register-SentryLoom.ps1", "utf8"),
+    fs.readFile("Remove-SentryLoom.ps1", "utf8"),
+    fs.readFile(path.join("installer", "SentryLoom.iss"), "utf8")
+  ]);
+
+  assert.match(tamperScript, /SetAccessRuleProtection\(\$true,\s*\$false\)/);
+  assert.match(tamperScript, /S-1-5-18/);
+  assert.match(tamperScript, /S-1-5-32-544/);
+  assert.match(tamperScript, /AdministratorRights[\s\S]+ReadAndExecute/);
+  assert.match(tamperScript, /Register-Relock[\s\S]+Register-ScheduledTask/);
+  assert.match(tamperScript, /Refusing to change permissions through a reparse point/);
+  assert.match(tamperScript, /Mode -eq 'Disable'[\s\S]+S-1-5-18/);
+
+  assert.match(authorizationScript, /'file-maintenance'/);
+  assert.match(authorizationScript, /if \(\$Result\.Accepted\)[\s\S]+Enable-AuthorizedFileMaintenance/);
+  assert.match(authorizationScript, /Open Authorized File Maintenance[\s\S]+-UserId 'SYSTEM'/);
+  assert.match(registrationScript, /Authorize SentryLoom File Maintenance\.lnk/);
+  assert.match(registrationScript, /TamperHelper -Mode Apply/);
+  assert.match(removalScript, /SentryLoom - Restore Tamper Protection/);
+
+  assert.match(installer, /Set-SentryLoomTamperProtection\.ps1/);
+  assert.match(installer, /InstalledAuthorizer[\s\S]+-Action file-maintenance/);
+  assert.match(authorizationScript, /Identity\.User\.Value -eq 'S-1-5-18'/);
+});
+
+test("resident protection starts HQ management without opening the client UI", async () => {
+  const cli = await fs.readFile(path.join("src", "cli.js"), "utf8");
+  const protectionBody = cli.match(/async function protection\(\) \{([\s\S]*?)\n\}/)?.[1] || "";
+  assert.match(protectionBody, /await engine\.startProtection\(targets\);[\s\S]+await engine\.startManagement\(\);/);
+});
+
+test("Windows upgrades migrate enrolled user state into machine-wide storage", {
+  skip: process.platform !== "win32"
+}, async () => {
+  const root = await sandbox("machine-state-migration");
+  const localAppData = path.join(root, "user-local");
+  const programData = path.join(root, "program-data");
+  const legacy = path.join(localAppData, "SentryLoom");
+  await fs.mkdir(path.join(legacy, "keys"), { recursive: true });
+  await fs.writeFile(path.join(legacy, "config.json"), JSON.stringify({
+    management: { enabled: true }
+  }));
+  await fs.writeFile(path.join(legacy, "keys", "hq-credentials.enc"), "encrypted-unit-state");
+  await fs.writeFile(path.join(legacy, "device-identity.json"), JSON.stringify({
+    deviceId: "preserved-device-identity"
+  }));
+  const result = spawnSync("powershell.exe", [
+    "-NoLogo",
+    "-NoProfile",
+    "-NonInteractive",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    path.resolve("Backup-SentryLoomState.ps1"),
+    "-TargetVersion",
+    "test"
+  ], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      LOCALAPPDATA: localAppData,
+      PROGRAMDATA: programData
+    }
+  });
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.equal(
+    await fs.readFile(
+      path.join(programData, "SentryLoom", "keys", "hq-credentials.enc"),
+      "utf8"
+    ),
+    "encrypted-unit-state"
+  );
+  assert.deepEqual(
+    JSON.parse(await fs.readFile(
+      path.join(programData, "SentryLoom", "device-identity.json"),
+      "utf8"
+    )),
+    { deviceId: "preserved-device-identity" }
+  );
+});
 
 test("HQ discovery targets every active IPv4 subnet and ignores internal adapters", () => {
   assert.deepEqual(hqDiscoveryBroadcastAddresses({
@@ -85,6 +199,62 @@ test("HQ discovery targets every active IPv4 subnet and ignores internal adapter
     "10.44.255.255"
   ]);
 });
+
+test("HQ discovery cannot replace or clear enrolled credentials", async () => {
+  await sandbox("discovery-read-only");
+  const credentials = {
+    serverUrl: "https://hq.example:8443",
+    fingerprint256: "A".repeat(64),
+    hqName: "Existing HQ",
+    deviceId: crypto.randomUUID(),
+    token: crypto.randomBytes(48).toString("base64url"),
+    enrolledAt: new Date().toISOString()
+  };
+  await saveHqCredentials(credentials);
+  await discoverHqServers({
+    timeoutMs: 500,
+    broadcastAddresses: []
+  });
+  assert.deepEqual(await loadHqCredentials(), credentials);
+});
+
+test("Setup preserves an approved enrollment instead of requesting it again", async () => {
+  const root = await sandbox("setup-preserves-enrollment");
+  const resultFile = path.join(root, "hq-request-result.json");
+  const credentials = {
+    serverUrl: "https://hq.example:8443",
+    fingerprint256: "B".repeat(64),
+    hqName: "Existing HQ",
+    deviceId: crypto.randomUUID(),
+    token: crypto.randomBytes(48).toString("base64url"),
+    enrolledAt: new Date().toISOString()
+  };
+  await saveHqCredentials(credentials);
+  const result = spawnSync(process.execPath, [
+    "--disable-warning=ExperimentalWarning",
+    "src/cli.js",
+    "hq",
+    "request-env"
+  ], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      SENTRYLOOM_HQ_URL: credentials.serverUrl,
+      SENTRYLOOM_HQ_RESULT_FILE: resultFile
+    }
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Existing enrollment with Existing HQ preserved/);
+  assert.deepEqual(JSON.parse(await fs.readFile(resultFile, "utf8")), {
+    status: "preserved",
+    hqName: credentials.hqName,
+    serverUrl: credentials.serverUrl,
+    deviceId: credentials.deviceId
+  });
+  assert.deepEqual(await loadHqCredentials(), credentials);
+});
+
 const {
   parseClamHashLine,
   parseClamCvd,
@@ -171,7 +341,7 @@ test("client upgrades preserve stored settings and record a versioned migration"
   assert.deepEqual(config.scanner.exclusions, ["C:\\Preserve-Me"]);
   const migration = JSON.parse(await fs.readFile(path.join(data, "upgrade-state.json"), "utf8"));
   assert.equal(migration.previousVersion, "0.16.1");
-  assert.equal(migration.currentVersion, "0.16.3");
+    assert.equal(migration.currentVersion, "0.16.6");
   const backups = await fs.readdir(path.join(data, "upgrade-backups"));
   assert.equal(backups.some((name) => name.startsWith("config-0.16.1-")), true);
 });
@@ -473,7 +643,7 @@ test("managed client replaces a preserved HQ target, encrypts enrollment, and ex
     });
     connector.running = true;
     await connector.pulse();
-    assert.equal(connector.status().hqVersion, "0.4.2");
+    assert.equal(connector.status().hqVersion, "0.4.3");
     assert.equal(connector.status().maintenanceAuthorizationSupported, true);
     for (let attempt = 0; attempt < 20 &&
          store.listCommands(credentials.deviceId)[0].status !== "completed"; attempt += 1) {
@@ -628,7 +798,7 @@ test("dashboard requires a launch session and CSRF for writes", async () => {
     JSON.stringify({
       launcherPid: 100,
       workerPid: 101,
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date(Date.now() + 60000).toISOString()
     })
   );
   const engine = await new AntivirusEngine().initialize();
@@ -637,7 +807,7 @@ test("dashboard requires a launch session and CSRF for writes", async () => {
     JSON.stringify({
       launcherPid: 100,
       workerPid: 101,
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date(Date.now() + 60000).toISOString()
     })
   );
   const dashboard = createDashboardServer(engine);
@@ -658,6 +828,13 @@ test("dashboard requires a launch session and CSRF for writes", async () => {
     const bootstrapResponse = await fetch(`${origin}/api/bootstrap`, { headers: { Cookie: cookie } });
     assert.equal(bootstrapResponse.status, 200);
     const bootstrap = await bootstrapResponse.json();
+    const uiResponse = await fetch(origin, { headers: { Cookie: cookie } });
+    const ui = await uiResponse.text();
+    assert.match(ui, /id="enroll-hq"[^>]*>Save server and request approval<\/button>/);
+    assert.match(ui, /id="submit-maintenance-password"[^>]*>Submit password for next change<\/button>/);
+    const appResponse = await fetch(`${origin}/app.js`, { headers: { Cookie: cookie } });
+    const appSource = await appResponse.text();
+    assert.match(appSource, /Discovery completed without changing the active HQ/);
     const iconResponse = await fetch(`${origin}/sentryloom-icon.png`, { headers: { Cookie: cookie } });
     assert.equal(iconResponse.status, 200);
     assert.equal(iconResponse.headers.get("content-type"), "image/png");
@@ -683,6 +860,94 @@ test("dashboard requires a launch session and CSRF for writes", async () => {
       headers: { Cookie: cookie, "X-SentryLoom-CSRF": bootstrap.csrf }
     });
     assert.equal(acceptedWrite.status, 409);
+  } finally {
+    await dashboard.close();
+  }
+});
+
+test("managed HQ server changes require maintenance authorization", async () => {
+  const calls = [];
+  const engine = {
+    async getDashboardData() {
+      return {};
+    },
+    async getHqStatus() {
+      return { enrolled: true };
+    },
+    async authorizeMaintenance(password, action) {
+      calls.push({ type: "authorize", password, action });
+      if (password !== "valid-maintenance-password") {
+        throw new Error("Maintenance password is invalid, expired, used, or revoked");
+      }
+    },
+    async requestHqEnrollment(options) {
+      calls.push({ type: "request", options });
+      return {
+        pending: true,
+        hqName: "Replacement HQ",
+        serverUrl: options.serverUrl
+      };
+    }
+  };
+  const dashboard = createDashboardServer(engine);
+  const address = await dashboard.listen("127.0.0.1", 0);
+  const origin = `http://127.0.0.1:${address.port}`;
+  try {
+    const sessionResponse = await fetch(
+      `${origin}/session?token=${dashboard.launchToken}`,
+      { redirect: "manual" }
+    );
+    const cookie = sessionResponse.headers.get("set-cookie").split(";")[0];
+    const bootstrapResponse = await fetch(`${origin}/api/bootstrap`, {
+      headers: { Cookie: cookie }
+    });
+    const { csrf } = await bootstrapResponse.json();
+    const submit = (maintenancePassword, serverUrl = "https://replacement-hq:8443") =>
+      fetch(`${origin}/api/hq/request`, {
+      method: "POST",
+      headers: {
+        Cookie: cookie,
+        "Content-Type": "application/json",
+        "X-SentryLoom-CSRF": csrf
+      },
+      body: JSON.stringify({
+        serverUrl,
+        fingerprint256: "A".repeat(64),
+        maintenancePassword
+      })
+    });
+
+    const invalidTarget = await submit("valid-maintenance-password", "not-a-server-url");
+    assert.equal(invalidTarget.status, 500);
+    assert.match((await invalidTarget.json()).error, /Invalid URL/);
+    assert.deepEqual(calls, [], "invalid targets must not consume a maintenance password");
+
+    const denied = await submit("wrong-password");
+    assert.equal(denied.status, 500);
+    assert.match((await denied.json()).error, /invalid, expired, used, or revoked/);
+    assert.deepEqual(calls, [{
+      type: "authorize",
+      password: "wrong-password",
+      action: "change-hq-server"
+    }]);
+
+    const accepted = await submit("valid-maintenance-password");
+    assert.equal(accepted.status, 202);
+    assert.equal((await accepted.json()).serverUrl, "https://replacement-hq:8443");
+    assert.deepEqual(calls.slice(1), [
+      {
+        type: "authorize",
+        password: "valid-maintenance-password",
+        action: "change-hq-server"
+      },
+      {
+        type: "request",
+        options: {
+          serverUrl: "https://replacement-hq:8443",
+          fingerprint256: "A".repeat(64)
+        }
+      }
+    ]);
   } finally {
     await dashboard.close();
   }

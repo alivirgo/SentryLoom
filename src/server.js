@@ -5,6 +5,7 @@ import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { APP_NAME, APP_VERSION, appPaths } from "./constants.js";
 import { validDashboardPage } from "./lib/ui-command.js";
+import { normalizeFingerprint, normalizeHqUrl } from "./lib/hq-client.js";
 
 const directory = path.dirname(fileURLToPath(import.meta.url));
 const publicDirectory = path.join(directory, "ui");
@@ -137,6 +138,10 @@ export function createDashboardServer(engine, options = {}) {
             json(response, 400, { error: "HQ URL, certificate fingerprint, and enrollment code are required" });
             return;
           }
+          const current = await engine.getHqStatus();
+          if (current.enrolled) {
+            await engine.authorizeMaintenance(body.maintenancePassword, "change-hq-server");
+          }
           json(response, 200, await engine.enrollHq({
             serverUrl: body.serverUrl,
             code: body.code,
@@ -154,9 +159,20 @@ export function createDashboardServer(engine, options = {}) {
             json(response, 400, { error: "HQ certificate fingerprint is invalid" });
             return;
           }
+          const allowHttp = process.env.SENTRYLOOM_ALLOW_INSECURE_HQ === "1";
+          const serverUrl = body.serverUrl?.trim()
+            ? normalizeHqUrl(body.serverUrl, { allowHttp })
+            : undefined;
+          const fingerprint256 = body.fingerprint256?.trim()
+            ? normalizeFingerprint(body.fingerprint256)
+            : undefined;
+          const current = await engine.getHqStatus();
+          if (current.enrolled) {
+            await engine.authorizeMaintenance(body.maintenancePassword, "change-hq-server");
+          }
           json(response, 202, await engine.requestHqEnrollment({
-            serverUrl: body.serverUrl?.trim() || undefined,
-            fingerprint256: body.fingerprint256?.trim() || undefined
+            serverUrl,
+            fingerprint256
           }));
           return;
         }

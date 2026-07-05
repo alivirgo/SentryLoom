@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>SentryLoom HQ</title>
-  <link rel="stylesheet" href="/styles.css?v=0.4.2">
-  <link rel="stylesheet" href="/approvals.css?v=0.4.2">
-  <link rel="stylesheet" href="/device-details.css?v=0.4.2">
-  <link rel="stylesheet" href="/alerts.css?v=0.4.2">
+  <link rel="stylesheet" href="/styles.css?v=0.4.3">
+  <link rel="stylesheet" href="/approvals.css?v=0.4.3">
+  <link rel="stylesheet" href="/device-details.css?v=0.4.3">
+  <link rel="stylesheet" href="/alerts.css?v=0.4.3">
 </head>
 <body>
   <section class="login" id="login">
@@ -113,9 +113,14 @@
             <input type="checkbox" id="setting-auto-deploy">
             <span><strong>Automatically deploy signed client updates</strong><small>Only newer packages accepted by the existing signature policy are queued.</small></span>
           </label>
+          <label class="server-setting-wide">Client update staging folder
+            <input id="setting-staging-directory" value="Z:\Extreme Control\SentryLoom Updates" spellcheck="false">
+            <small id="update-staging-state">HQ checks this folder using its SYSTEM service identity. Use a UNC path for network shares.</small>
+          </label>
         </div>
         <div class="server-settings-actions">
           <button class="primary" id="save-server-settings">Save server settings</button>
+          <button id="publish-staged-update">Publish latest and deploy</button>
           <span>Retention cleanup runs immediately and then every six hours.</span>
         </div>
       </section>
@@ -198,6 +203,7 @@
         <span>Only predefined SentryLoom actions can be sent</span>
       </div>
       <div class="command-grid">
+        <button data-wake>Wake on LAN</button>
         <button data-command="scan.quick">Quick scan</button>
         <button data-command="scan.full">Full scan</button>
         <button data-command="scan.startup">Startup scan</button>
@@ -213,6 +219,6 @@
     </section>
   </dialog>
   <div class="toast" id="toast"></div>
-  <script type="module" src="/app.js?v=0.4.2"></script>
+  <script type="module" src="/app.js?v=0.4.3"></script>
 </body>
 </html>

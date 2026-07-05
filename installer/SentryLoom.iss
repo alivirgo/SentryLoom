@@ -1,5 +1,5 @@
 #define MyAppName "SentryLoom Endpoint Security"
-#define MyAppVersion "0.16.3"
+#define MyAppVersion "0.16.6"
 #define MyAppPublisher "NUC7 Studios"
 #define MyAppExeName "SentryLoom.exe"
 
@@ -46,13 +46,14 @@ Source: "..\Set-SentryLoomDns.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\Set-SentryLoomUsbStorage.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\Show-SentryLoomNotification.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\Authorize-SentryLoomMaintenance.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\Set-SentryLoomTamperProtection.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\Backup-SentryLoomState.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\Update-SentryLoom.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\SECURITY.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\docs\*"; DestDir: "{app}\docs"; Excludes: "releases\*"; Flags: ignoreversion recursesubdirs createallsubdirs
 [Run]
-Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Description: "Open SentryLoom security console"; Flags: postinstall nowait skipifsilent
+Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Description: "Open SentryLoom security console"; Flags: postinstall nowait skipifsilent runasoriginaluser
 
 [UninstallRun]
 Filename: "{code:GetPowerShellPath}"; Parameters: "-NoLogo -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File ""{app}\Remove-SentryLoom.ps1"""; WorkingDir: "{app}"; Flags: runhidden waituntilterminated; RunOnceId: "SentryLoomCleanup"
@@ -238,11 +239,29 @@ end;
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   ResultCode: Integer;
-  StopScript, BackupScript, FailureLog, Details: String;
+  StopScript, BackupScript, FailureLog, Details, InstalledAuthorizer: String;
   DetailsAnsi: AnsiString;
 begin
   Result := '';
   NeedsRestart := False;
+  InstalledAuthorizer := ExpandConstant('{app}\Authorize-SentryLoomMaintenance.ps1');
+  if FileExists(InstalledAuthorizer) and
+     FileExists(ExpandConstant('{app}\Set-SentryLoomTamperProtection.ps1')) then
+  begin
+    InstallDetail('Requesting authorization to update protected SentryLoom files.');
+    if (not Exec(
+      GetPowerShellPath(''),
+      '-NoLogo -NoProfile -ExecutionPolicy Bypass -File "' + InstalledAuthorizer +
+        '" -Action file-maintenance',
+      ExpandConstant('{app}'),
+      SW_SHOW,
+      ewWaitUntilTerminated,
+      ResultCode)) or (ResultCode <> 0) then
+    begin
+      Result := 'Setup was cancelled because SentryLoom file maintenance was not authorized.';
+      Exit;
+    end;
+  end;
   InstallDetail('Checking for and stopping a previous SentryLoom version.');
   ExtractTemporaryFile('Stop-SentryLoom.ps1');
   ExtractTemporaryFile('Backup-SentryLoomState.ps1');
@@ -344,8 +363,8 @@ end;
 procedure SaveHqEnrollment;
 var
   ResultCode: Integer;
-  FailureLog, Details: String;
-  DetailsAnsi: AnsiString;
+  FailureLog, ResultFile, Details, RequestResult: String;
+  DetailsAnsi, RequestResultAnsi: AnsiString;
 begin
   if DeploymentPage.SelectedValueIndex <> 1 then
   begin
@@ -356,8 +375,11 @@ begin
   SetEnvironmentVariable('SENTRYLOOM_HQ_URL', Trim(HqPage.Values[0]));
   SetEnvironmentVariable('SENTRYLOOM_HQ_FINGERPRINT', Uppercase(Trim(HqPage.Values[1])));
   FailureLog := ExpandConstant('{tmp}\SentryLoom-HQ-Enrollment-Error.txt');
+  ResultFile := ExpandConstant('{tmp}\SentryLoom-HQ-Enrollment-Result.json');
   DeleteFile(FailureLog);
+  DeleteFile(ResultFile);
   SetEnvironmentVariable('SENTRYLOOM_FAILURE_LOG', FailureLog);
+  SetEnvironmentVariable('SENTRYLOOM_HQ_RESULT_FILE', ResultFile);
   try
     if (not RunHidden(
       GetNodePath,
@@ -379,15 +401,27 @@ begin
     else
     begin
       HqEnrollmentConfigured := True;
-      InstallDetail('HQ was found and the endpoint approval request was submitted.');
-      InstallDetail('The selected HQ is now the active enrollment target; any previous server credential was retired.');
-      SetupWarnings := SetupWarnings +
-        'This endpoint is waiting for approval in the SentryLoom HQ console. Local protection is already active.' + #13#10;
+      RequestResult := '';
+      RequestResultAnsi := '';
+      if FileExists(ResultFile) and LoadStringFromFile(ResultFile, RequestResultAnsi) then
+        RequestResult := String(RequestResultAnsi);
+      if Pos('"status":"preserved"', RequestResult) > 0 then
+      begin
+        InstallDetail('The existing approved HQ enrollment and device identity were preserved.');
+      end
+      else
+      begin
+        InstallDetail('HQ was found and the endpoint approval request was submitted.');
+        InstallDetail('The selected HQ is now the active enrollment target; any previous server credential was retired.');
+        SetupWarnings := SetupWarnings +
+          'This endpoint is waiting for approval in the SentryLoom HQ console. Local protection is already active.' + #13#10;
+      end;
     end;
   finally
     SetEnvironmentVariable('SENTRYLOOM_HQ_URL', '');
     SetEnvironmentVariable('SENTRYLOOM_HQ_FINGERPRINT', '');
     SetEnvironmentVariable('SENTRYLOOM_FAILURE_LOG', '');
+    SetEnvironmentVariable('SENTRYLOOM_HQ_RESULT_FILE', '');
     HqPage.Values[1] := '';
   end;
 end;

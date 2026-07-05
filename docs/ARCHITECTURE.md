@@ -89,13 +89,16 @@ DNS filtering is a user-initiated system mutation. The dashboard calls a narrowl
 
 ## Operational model
 
-`Register-SentryLoom.ps1` registers per-user scheduled tasks:
+`Register-SentryLoom.ps1` registers machine scheduled tasks:
 
 - quick scan daily at 02:00, with start-when-available;
 - full scan weekly while idle;
-- realtime monitoring at user logon.
+- realtime monitoring at Windows startup under the machine account.
 
 The native WinForms launcher runs resident protection and scheduled scans
-without a console window, owns the notification-area health icon, and captures
-bounded background output. The dashboard may also host realtime monitoring
-while open. A local connector lease prevents duplicate HQ telemetry streams.
+without a console window and captures bounded background output. A separate
+per-session launcher mode owns the notification-area health icon. Setup,
+resident protection, tray, and GUI share `%ProgramData%\SentryLoom`; upgrades
+migrate legacy per-user state without changing the device identity. The
+dashboard may also host realtime monitoring while open. A local connector
+lease prevents duplicate HQ telemetry streams.

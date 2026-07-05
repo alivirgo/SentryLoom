@@ -1,16 +1,107 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('uninstall', 'disable-protection', 'critical-settings')]
-    [string]$Action = 'uninstall'
+    [ValidateSet('uninstall', 'disable-protection', 'critical-settings', 'file-maintenance')]
+    [string]$Action = 'uninstall',
+
+    [switch]$Elevated
 )
 
 $ErrorActionPreference = 'Stop'
-$ConfigPath = Join-Path $env:LOCALAPPDATA 'SentryLoom\config.json'
+$PowerShell = (Get-Process -Id $PID -ErrorAction Stop).Path
+$Identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$Principal = New-Object Security.Principal.WindowsPrincipal($Identity)
+if (-not $Principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    if ($Elevated) {
+        throw 'Maintenance authorization requires administrator elevation.'
+    }
+    $Process = Start-Process `
+        -FilePath $PowerShell `
+        -ArgumentList @(
+            '-NoLogo',
+            '-NoProfile',
+            '-WindowStyle', 'Hidden',
+            '-ExecutionPolicy', 'Bypass',
+            '-File', "`"$PSCommandPath`"",
+            '-Action', $Action,
+            '-Elevated'
+        ) `
+        -Verb RunAs `
+        -Wait `
+        -PassThru
+    exit $Process.ExitCode
+}
+
+$TamperHelper = Join-Path $PSScriptRoot 'Set-SentryLoomTamperProtection.ps1'
+function Enable-AuthorizedFileMaintenance {
+    if ($Action -notin @('uninstall', 'file-maintenance')) {
+        return
+    }
+    if (-not (Test-Path -LiteralPath $TamperHelper -PathType Leaf)) {
+        throw 'SentryLoom tamper-protection components are missing.'
+    }
+
+    $TaskName = 'SentryLoom - Open Authorized File Maintenance'
+    $Arguments = '-NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass ' +
+        "-File `"$TamperHelper`" -Mode Disable -InstallRoot `"$PSScriptRoot`" -RelockAfterMinutes 5"
+    $TaskAction = New-ScheduledTaskAction `
+        -Execute $PowerShell `
+        -Argument $Arguments `
+        -WorkingDirectory $PSScriptRoot
+    $TaskTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1)
+    $TaskPrincipal = New-ScheduledTaskPrincipal `
+        -UserId 'SYSTEM' `
+        -LogonType ServiceAccount `
+        -RunLevel Highest
+    $TaskSettings = New-ScheduledTaskSettingsSet `
+        -StartWhenAvailable `
+        -ExecutionTimeLimit (New-TimeSpan -Minutes 2)
+    $StartedAfter = (Get-Date).AddSeconds(-2)
+
+    try {
+        Register-ScheduledTask `
+            -TaskName $TaskName `
+            -Action $TaskAction `
+            -Trigger $TaskTrigger `
+            -Principal $TaskPrincipal `
+            -Settings $TaskSettings `
+            -Description 'Opens a bounded SentryLoom file-maintenance window after HQ authorization.' `
+            -Force | Out-Null
+        Start-ScheduledTask -TaskName $TaskName
+
+        $Deadline = [DateTime]::UtcNow.AddSeconds(30)
+        do {
+            Start-Sleep -Milliseconds 200
+            $Task = Get-ScheduledTask -TaskName $TaskName -ErrorAction Stop
+            $Info = Get-ScheduledTaskInfo -TaskName $TaskName -ErrorAction Stop
+            $Completed = $Info.LastRunTime -ge $StartedAfter -and $Task.State -ne 'Running'
+        } while (-not $Completed -and [DateTime]::UtcNow -lt $Deadline)
+
+        if (-not $Completed) {
+            throw 'SentryLoom timed out while opening the authorized file-maintenance window.'
+        }
+        if ($Info.LastTaskResult -ne 0) {
+            throw "SentryLoom could not open the authorized file-maintenance window (task result $($Info.LastTaskResult))."
+        }
+    } finally {
+        Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
+    }
+}
+
+# The resident protection and signed automatic updater run as LocalSystem.
+# That machine identity already owns the protected tree and does not need a
+# reusable password or a writable administrator ACL.
+if ($Identity.User.Value -eq 'S-1-5-18') {
+    return
+}
+
+$ConfigPath = Join-Path $env:ProgramData 'SentryLoom\config.json'
 if (-not (Test-Path -LiteralPath $ConfigPath -PathType Leaf)) {
+    Enable-AuthorizedFileMaintenance
     exit 0
 }
 $Config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
 if (-not $Config.management.enabled) {
+    Enable-AuthorizedFileMaintenance
     exit 0
 }
 
@@ -42,6 +133,9 @@ function Test-MaintenancePassword([string]$Password) {
 $ProvidedPassword = [string]$env:SENTRYLOOM_MAINTENANCE_PASSWORD
 if ($ProvidedPassword) {
     $Result = Test-MaintenancePassword $ProvidedPassword
+    if ($Result.Accepted) {
+        Enable-AuthorizedFileMaintenance
+    }
     exit $(if ($Result.Accepted) { 0 } else { 1 })
 }
 
@@ -102,8 +196,13 @@ for ($Attempt = 1; $Attempt -le 3; $Attempt++) {
     $PasswordBox.Text = ''
     $Form.Dispose()
     if ($Result.Accepted) {
+        Enable-AuthorizedFileMaintenance
         [Windows.Forms.MessageBox]::Show(
-            'Maintenance authorization accepted. The requested operation can continue.',
+            $(if ($Action -eq 'file-maintenance') {
+                'Maintenance authorization accepted. SentryLoom files can be maintained for five minutes and will then lock automatically.'
+            } else {
+                'Maintenance authorization accepted. The requested operation can continue.'
+            }),
             'SentryLoom',
             [Windows.Forms.MessageBoxButtons]::OK,
             [Windows.Forms.MessageBoxIcon]::Information

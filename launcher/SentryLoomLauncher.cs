@@ -14,8 +14,8 @@ using System.Text.RegularExpressions;
 [assembly: AssemblyCompany("NUC7 Studios")]
 [assembly: AssemblyProduct("SentryLoom Endpoint Security")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 NUC7 Studios")]
-[assembly: AssemblyVersion("0.16.3.0")]
-[assembly: AssemblyFileVersion("0.16.3.0")]
+[assembly: AssemblyVersion("0.16.6.0")]
+[assembly: AssemblyFileVersion("0.16.6.0")]
 [assembly: ComVisible(false)]
 
 namespace NUC7Studios.SentryLoom
@@ -23,7 +23,8 @@ namespace NUC7Studios.SentryLoom
     internal static class Program
     {
         private const string MutexName = "Local\\NUC7Studios.SentryLoom.Console";
-        private const string BackgroundMutexName = "Local\\NUC7Studios.SentryLoom.Background";
+        private const string BackgroundMutexName = "Global\\NUC7Studios.SentryLoom.Background";
+        private const string TrayMutexName = "Local\\NUC7Studios.SentryLoom.Tray";
         private static readonly object LogLock = new object();
         private delegate bool EnumWindowsCallback(IntPtr window, IntPtr parameter);
 
@@ -51,7 +52,7 @@ namespace NUC7Studios.SentryLoom
             if (!String.IsNullOrWhiteSpace(configured))
                 return Path.GetFullPath(configured);
             return Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
                 "SentryLoom");
         }
 
@@ -291,6 +292,42 @@ namespace NUC7Studios.SentryLoom
             using (var instance = new Mutex(true, BackgroundMutexName, out createdNew))
             {
                 if (!createdNew) return 0;
+                Process child = null;
+                System.Threading.Timer timer = null;
+                try
+                {
+                    AppendOutput("system", "Starting resident protection");
+                    child = StartWorker("protect");
+                    WriteBackgroundRuntime(child);
+                    timer = new System.Threading.Timer(delegate
+                    {
+                        if (child == null || child.HasExited) return;
+                        try { WriteBackgroundRuntime(child); } catch {}
+                    }, null, TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(3));
+                    child.WaitForExit();
+                    AppendOutput("system", "Resident protection exited with code " + child.ExitCode);
+                    return child.ExitCode;
+                }
+                finally
+                {
+                    if (timer != null) timer.Dispose();
+                    try
+                    {
+                        File.Delete(Path.Combine(DataDirectory(), "background-runtime.json"));
+                    }
+                    catch {}
+                    if (child != null) child.Dispose();
+                    try { instance.ReleaseMutex(); } catch (ApplicationException) { }
+                }
+            }
+        }
+
+        private static int RunTray()
+        {
+            bool createdNew;
+            using (var instance = new Mutex(true, TrayMutexName, out createdNew))
+            {
+                if (!createdNew) return 0;
                 Icon green = StatusIcon(Color.FromArgb(35, 176, 92));
                 Icon red = StatusIcon(Color.FromArgb(210, 55, 65));
                 var tray = new NotifyIcon();
@@ -306,33 +343,21 @@ namespace NUC7Studios.SentryLoom
                 tray.Text = "SentryLoom HQ unreachable";
                 tray.Visible = true;
                 tray.DoubleClick += delegate { OpenOrStartConsole("overview"); };
-                Process child = null;
                 var timer = new System.Windows.Forms.Timer();
                 timer.Interval = 3000;
                 timer.Tick += delegate
                 {
-                    if (child == null || child.HasExited)
-                    {
-                        Application.ExitThread();
-                        return;
-                    }
                     bool connected = HqConnected();
                     tray.Icon = connected ? green : red;
                     tray.Text = connected
                         ? "SentryLoom HQ connected"
                         : "SentryLoom HQ unreachable";
-                    try { WriteBackgroundRuntime(child); } catch {}
                 };
                 try
                 {
-                    AppendOutput("system", "Starting resident protection");
-                    child = StartWorker("protect");
-                    WriteBackgroundRuntime(child);
                     timer.Start();
                     Application.Run();
-                    child.WaitForExit();
-                    AppendOutput("system", "Resident protection exited with code " + child.ExitCode);
-                    return child.ExitCode;
+                    return 0;
                 }
                 finally
                 {
@@ -343,15 +368,26 @@ namespace NUC7Studios.SentryLoom
                     menu.Dispose();
                     green.Dispose();
                     red.Dispose();
-                    try
-                    {
-                        File.Delete(Path.Combine(DataDirectory(), "background-runtime.json"));
-                    }
-                    catch {}
-                    if (child != null) child.Dispose();
                     try { instance.ReleaseMutex(); } catch (ApplicationException) { }
                 }
             }
+        }
+
+        private static void EnsureTray()
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = Assembly.GetExecutingAssembly().Location,
+                    Arguments = "--tray",
+                    WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                });
+            }
+            catch {}
         }
 
         private static int RunOneShot(string command)
@@ -381,6 +417,15 @@ namespace NUC7Studios.SentryLoom
                         return 1;
                     }
                 }
+                if (argument.Equals("--tray", StringComparison.OrdinalIgnoreCase))
+                {
+                    try { return RunTray(); }
+                    catch (Exception error)
+                    {
+                        AppendOutput("fatal", error.ToString());
+                        return 1;
+                    }
+                }
                 if (argument.StartsWith("--command=", StringComparison.OrdinalIgnoreCase))
                 {
                     string command = argument.Substring("--command=".Length).ToLowerInvariant();
@@ -398,6 +443,7 @@ namespace NUC7Studios.SentryLoom
                 }
             }
             string requestedPage = RequestedPage(arguments);
+            EnsureTray();
 
             bool createdNew;
             using (var instance = new Mutex(true, MutexName, out createdNew))
