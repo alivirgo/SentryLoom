@@ -2,7 +2,7 @@ import os from "node:os";
 import path from "node:path";
 
 export const APP_NAME = "SentryLoom Endpoint Security";
-export const APP_VERSION = "0.16.9";
+export const APP_VERSION = "0.16.10";
 
 export function dataDirectory() {
   if (process.env.SENTRYLOOM_DATA_DIR) return path.resolve(process.env.SENTRYLOOM_DATA_DIR);

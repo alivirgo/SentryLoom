@@ -4,6 +4,22 @@ All notable changes to SentryLoom will be documented here.
 
 The project uses semantic versioning where practical.
 
+## [0.16.10] - 2026-07-05
+
+SentryLoom Endpoint Security v0.16.10 ships with SentryLoom HQ v0.4.5.
+
+### Managed upgrade authorization recovery
+
+- Added a bounded pre-install bootstrap that recovers an enrolled HQ after its
+  address changes, before the protected installed files are replaced.
+- The bootstrap updates only the encrypted HQ URL after the existing pinned
+  certificate and device token both authenticate at the discovered address.
+- Valid HQ maintenance passwords now work during upgrades even when the old
+  stored HQ address is offline.
+- Clean and previously standalone installations continue without an HQ
+  password. Previously managed installations still require authorization
+  before downgrading to standalone mode.
+
 ## [0.16.9] - 2026-07-05
 
 SentryLoom Endpoint Security v0.16.9 ships with SentryLoom HQ v0.4.5.

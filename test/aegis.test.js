@@ -88,13 +88,15 @@ test("Windows setup protects installed files behind bounded maintenance authoriz
     authorizationScript,
     registrationScript,
     removalScript,
-    installer
+    installer,
+    relocationBootstrap
   ] = await Promise.all([
     fs.readFile("Set-SentryLoomTamperProtection.ps1", "utf8"),
     fs.readFile("Authorize-SentryLoomMaintenance.ps1", "utf8"),
     fs.readFile("Register-SentryLoom.ps1", "utf8"),
     fs.readFile("Remove-SentryLoom.ps1", "utf8"),
-    fs.readFile(path.join("installer", "SentryLoom.iss"), "utf8")
+    fs.readFile(path.join("installer", "SentryLoom.iss"), "utf8"),
+    fs.readFile(path.join("installer", "Relocate-SentryLoomHq.mjs"), "utf8")
   ]);
 
   assert.match(tamperScript, /SetAccessRuleProtection\(\$true,\s*\$false\)/);
@@ -115,9 +117,21 @@ test("Windows setup protects installed files behind bounded maintenance authoriz
   assert.match(installer, /Set-SentryLoomTamperProtection\.ps1/);
   assert.match(installer, /InstalledAuthorizer[\s\S]+-Action file-maintenance/);
   assert.match(authorizationScript, /Identity\.User\.Value -eq 'S-1-5-18'/);
+  assert.match(
+    authorizationScript,
+    /if \(-not \$Config\.management\.enabled\)[\s\S]+Enable-AuthorizedFileMaintenance/
+  );
   assert.match(installer, /JsonStringValue\(RequestResult, 'verificationCode'\)/);
   assert.match(installer, /hq poll-pending-env/);
   assert.doesNotMatch(installer, /SENTRYLOOM_HQ_VERIFICATION_CODE/);
+  assert.match(installer, /ExtractTemporaryFile\('Relocate-SentryLoomHq\.mjs'\)/);
+  assert.match(
+    installer,
+    /Relocate-SentryLoomHq\.mjs[\s\S]+Requesting authorization to update protected SentryLoom files/
+  );
+  assert.match(relocationBootstrap, /HQ certificate fingerprint mismatch/);
+  assert.match(relocationBootstrap, /\/api\/v1\/device\/session/);
+  assert.match(relocationBootstrap, /Device API route not found/);
 });
 
 test("resident protection starts HQ management without opening the client UI", async () => {
@@ -346,7 +360,7 @@ test("client upgrades preserve stored settings and record a versioned migration"
   assert.deepEqual(config.scanner.exclusions, ["C:\\Preserve-Me"]);
   const migration = JSON.parse(await fs.readFile(path.join(data, "upgrade-state.json"), "utf8"));
   assert.equal(migration.previousVersion, "0.16.1");
-  assert.equal(migration.currentVersion, "0.16.9");
+  assert.equal(migration.currentVersion, "0.16.10");
   const backups = await fs.readdir(path.join(data, "upgrade-backups"));
   assert.equal(backups.some((name) => name.startsWith("config-0.16.1-")), true);
 });

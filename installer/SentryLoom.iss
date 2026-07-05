@@ -1,5 +1,5 @@
 #define MyAppName "SentryLoom Endpoint Security"
-#define MyAppVersion "0.16.9"
+#define MyAppVersion "0.16.10"
 #define MyAppPublisher "NUC7 Studios"
 #define MyAppExeName "SentryLoom.exe"
 
@@ -35,6 +35,7 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 [Files]
 Source: "..\Stop-SentryLoom.ps1"; Flags: dontcopy noencryption
 Source: "..\Backup-SentryLoomState.ps1"; Flags: dontcopy noencryption
+Source: "Relocate-SentryLoomHq.mjs"; Flags: dontcopy noencryption
 Source: "..\build\output\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\src\*"; DestDir: "{app}\src"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\signatures\base.json"; DestDir: "{app}\signatures"; Flags: ignoreversion
@@ -237,6 +238,17 @@ begin
   if FileExists(InstalledAuthorizer) and
      FileExists(ExpandConstant('{app}\Set-SentryLoomTamperProtection.ps1')) then
   begin
+    if FileExists(GetNodePath) then
+    begin
+      ExtractTemporaryFile('Relocate-SentryLoomHq.mjs');
+      SetEnvironmentVariable('SENTRYLOOM_HQ_URL', Trim(HqPage.Values[0]));
+      RunHidden(
+        GetNodePath,
+        '"' + ExpandConstant('{tmp}\Relocate-SentryLoomHq.mjs') + '"',
+        ExpandConstant('{tmp}'),
+        ResultCode);
+      SetEnvironmentVariable('SENTRYLOOM_HQ_URL', '');
+    end;
     InstallDetail('Requesting authorization to update protected SentryLoom files.');
     if (not Exec(
       GetPowerShellPath(''),
