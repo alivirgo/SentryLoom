@@ -1143,7 +1143,8 @@ $$("[data-update-feed]").forEach((button) => {
   button.addEventListener("click", () => updateFeeds([button.dataset.updateFeed]));
 });
 $("#update-all-feeds").addEventListener("click", () => updateFeeds([
-  "clamav", "malwarebazaar", "urlhaus", "feodotracker", "threatfox"
+  "clamav", "malwarebazaar", "urlhaus", "feodotracker", "threatfox",
+  "spamhaus-drop", "misp-circl", "misp-botvrij", "lmd"
 ]));
 $("#quarantine-table").addEventListener("click", async (event) => {
   const restore = event.target.dataset.restore;

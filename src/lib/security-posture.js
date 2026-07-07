@@ -90,7 +90,9 @@ export function calculateSecurityPosture(status, config) {
   });
   control({
     id: "windows-events",
-    title: "Windows security event monitoring",
+    title: process.platform === "win32"
+      ? "Windows security event monitoring"
+      : process.platform === "darwin" ? "macOS security event monitoring" : "Linux security event monitoring",
     enabled: config.monitoring.windowsEventsEnabled,
     running: status.protection.advanced.running,
     weight: 8,

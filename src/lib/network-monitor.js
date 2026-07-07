@@ -38,12 +38,49 @@ export function parseNetstatOutput(output) {
   return connections;
 }
 
-function runNetstat() {
-  const executable = process.platform === "win32"
-    ? path.join(process.env.SystemRoot || "C:\\Windows", "System32", "NETSTAT.EXE")
-    : "netstat";
+export function parseSsOutput(output) {
+  const connections = [];
+  for (const line of String(output || "").split(/\r?\n/)) {
+    const fields = line.trim().split(/\s+/);
+    if (!["ESTAB", "SYN-SENT", "SYN-RECV"].includes(fields[0])) continue;
+    const local = parseEndpoint(fields[3]);
+    const remote = parseEndpoint(fields[4]);
+    const pid = Number(line.match(/\bpid=(\d+)/)?.[1] || 0);
+    if (!local || !remote) continue;
+    if (["0.0.0.0", "::", "127.0.0.1", "::1"].includes(remote.host)) continue;
+    connections.push({
+      protocol: "tcp",
+      local,
+      remote,
+      state: fields[0].replaceAll("-", "_"),
+      pid: Number.isInteger(pid) ? pid : 0
+    });
+  }
+  return connections;
+}
+
+export function parseLsofOutput(output) {
+  const connections = [];
+  let pid = 0;
+  for (const line of String(output || "").split(/\r?\n/)) {
+    if (line.startsWith("p")) {
+      pid = Number(line.slice(1)) || 0;
+      continue;
+    }
+    if (!line.startsWith("n") || !line.includes("->")) continue;
+    const [localValue, remoteValue] = line.slice(1).split("->");
+    const local = parseEndpoint(localValue);
+    const remote = parseEndpoint(remoteValue);
+    if (!local || !remote) continue;
+    if (["0.0.0.0", "::", "127.0.0.1", "::1"].includes(remote.host)) continue;
+    connections.push({ protocol: "tcp", local, remote, state: "ESTABLISHED", pid });
+  }
+  return connections;
+}
+
+function runCommand(executable, args) {
   return new Promise((resolve, reject) => {
-    execFile(executable, ["-ano", "-p", "TCP"], {
+    execFile(executable, args, {
       windowsHide: true,
       timeout: 15000,
       maxBuffer: 16 * 1024 * 1024
@@ -52,6 +89,29 @@ function runNetstat() {
       else resolve(stdout);
     });
   });
+}
+
+async function readConnections() {
+  if (process.platform === "win32") {
+    const executable = path.join(process.env.SystemRoot || "C:\\Windows", "System32", "NETSTAT.EXE");
+    return parseNetstatOutput(await runCommand(executable, ["-ano", "-p", "TCP"]));
+  }
+  if (process.platform === "darwin") {
+    return parseLsofOutput(await runCommand("lsof", [
+      "-nP", "-iTCP", "-sTCP:ESTABLISHED", "-Fp", "-Fn"
+    ]));
+  }
+  return parseSsOutput(await runCommand("ss", ["-H", "-tanp"]));
+}
+
+async function readPlatformDnsEntries() {
+  if (process.platform === "win32") return readDnsCacheEntries();
+  if (process.platform !== "darwin") return [];
+  const output = await runCommand("dscacheutil", ["-cachedump", "-entries", "Host"]).catch(() => "");
+  return [...new Set(output.split(/\r?\n/).flatMap((line) => {
+    const match = line.match(/\bname:\s*(\S+)/i);
+    return match ? [match[1].toLowerCase().replace(/\.$/, "")] : [];
+  }))].slice(0, 10000);
 }
 
 export class NetworkMonitor {
@@ -114,7 +174,7 @@ export class NetworkMonitor {
   }
 
   async pollConnections() {
-    const connections = parseNetstatOutput(await runNetstat());
+    const connections = await readConnections();
     this.connectionsObserved = connections.length;
     this.lastConnectionPoll = new Date().toISOString();
     for (const connection of connections) {
@@ -134,7 +194,7 @@ export class NetworkMonitor {
   }
 
   async pollDns() {
-    const entries = await readDnsCacheEntries();
+    const entries = await readPlatformDnsEntries();
     this.dnsEntriesObserved = entries.length;
     this.lastDnsPoll = new Date().toISOString();
     for (const domain of entries) {
@@ -170,6 +230,7 @@ export class NetworkMonitor {
       running: this.running,
       tcpConnectionMetadata: true,
       dnsCacheMonitoring: this.config.protection.dnsMonitoringEnabled,
+      dnsCacheSupported: process.platform === "win32" || process.platform === "darwin",
       packetInspection: false,
       connectionsObserved: this.connectionsObserved,
       dnsEntriesObserved: this.dnsEntriesObserved,

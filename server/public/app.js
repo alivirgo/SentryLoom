@@ -176,7 +176,20 @@ function renderIssues(issues = []) {
 function renderScanHistory(scans = []) {
   if (!scans.length) return `<div class="detail-empty">No completed scans have been reported.</div>`;
   return `<div class="data-table-wrap"><table class="data-table"><thead><tr><th>Scan</th><th>Completed</th><th>Files</th><th>Detections</th><th>Errors</th></tr></thead><tbody>
-    ${scans.slice(0, 20).map((scan) => `<tr><td><strong>${escapeHtml(humanLabel(scan.type || "scan"))}</strong><small>${escapeHtml(scan.target || "Multiple targets")}</small></td><td>${escapeHtml(relative(scan.endedAt))}</td><td>${escapeHtml(formatScalar(scan.scanned ?? 0))}</td><td class="${scan.detections ? "danger-text" : ""}">${escapeHtml(formatScalar(scan.detections ?? 0))}</td><td>${escapeHtml(formatScalar(scan.errorCount ?? 0))}</td></tr>`).join("")}
+    ${scans.slice(0, 20).map((scan) => `<tr><td><strong>${escapeHtml(humanLabel(scan.type || "scan"))}</strong><small>${escapeHtml(scan.target || (scan.riskSignals ? `${scan.riskSignals} risk signal(s)` : "Multiple targets"))}</small></td><td>${escapeHtml(relative(scan.endedAt))}</td><td>${escapeHtml(formatScalar(scan.scanned ?? 0))}</td><td class="${scan.detections ? "danger-text" : ""}">${escapeHtml(formatScalar(scan.detections ?? 0))}</td><td>${escapeHtml(formatScalar(scan.errorCount ?? scan.errors ?? 0))}</td></tr>`).join("")}
+  </tbody></table></div>`;
+}
+
+function renderApplicationInventory(applications = []) {
+  if (!applications.length) return `<div class="detail-empty">No application inventory was reported.</div>`;
+  return `<div class="data-table-wrap"><table class="data-table"><thead><tr><th>Application</th><th>Version</th><th>Source</th><th>Target</th><th>Risk signals</th></tr></thead><tbody>
+    ${applications.slice(0, 300).map((app) => `<tr>
+      <td><strong>${escapeHtml(app.name || app.package)}</strong><small>${escapeHtml(app.package || "")}</small></td>
+      <td>${escapeHtml(app.versionName || String(app.versionCode || "—"))}</td>
+      <td>${escapeHtml(app.system ? "System" : app.installer || "Unknown / sideloaded")}</td>
+      <td>${escapeHtml(app.targetSdk ? `API ${app.targetSdk}` : "—")}</td>
+      <td class="${app.riskSignals?.length ? "danger-text" : ""}">${escapeHtml((app.riskSignals || []).map(humanLabel).join(", ") || "None")}</td>
+    </tr>`).join("")}
   </tbody></table></div>`;
 }
 
@@ -247,6 +260,21 @@ function renderDeviceDetails(result) {
   $("#device-meta").textContent = `${device.hostname} · ${device.platform} · Client ${device.appVersion} · ${device.remoteAddress || "Address unavailable"}`;
   $("#device-live").classList.toggle("offline", !current);
   $("#device-live").innerHTML = `<i></i><span>${current ? `Live · ${relative(device.lastSeen)}` : `Offline · ${relative(device.lastSeen)}`}</span>`;
+  const supportedCommands = Array.isArray(status.capabilities?.commands)
+    ? new Set(status.capabilities.commands)
+    : null;
+  document.querySelectorAll("#device-dialog [data-command]").forEach((button) => {
+    const supported = !supportedCommands || supportedCommands.has(button.dataset.command);
+    button.disabled = !supported;
+    button.title = supported ? "" : "This action is not supported by this endpoint";
+  });
+  const wake = document.querySelector("#device-dialog [data-wake]");
+  if (wake) {
+    const supported = !Array.isArray(status.capabilities?.features) ||
+      status.capabilities.features.includes("control.wake-on-lan");
+    wake.disabled = !supported;
+    wake.title = supported ? "" : "Wake on LAN is not available on this endpoint";
+  }
 
   const metrics = `<div class="detail-metrics">
     ${metric("SECURITY SCORE", security.score ?? "—", security.grade ? `Grade ${security.grade}` : "Not evaluated", Number(security.score) < 70 ? "warning" : "secure")}
@@ -283,6 +311,10 @@ function renderDeviceDetails(result) {
       ${protectionSections}
       ${detailSection("SCANNING", "Current scan activity", activeScan)}
       ${detailSection("RUNTIME", "Client process health", propertyGrid(status.runtime))}
+      ${detailSection("SYSTEM", "Operating system, hardware, storage and network inventory", propertyGrid(status.system), { wide: true })}
+      ${detailSection("CAPABILITIES", "Endpoint-reported features and remote actions", propertyGrid(status.capabilities), { wide: true })}
+      ${Array.isArray(status.system?.applications) ? detailSection("ANDROID APPS", "Installed application security inventory", renderApplicationInventory(status.system.applications), { wide: true, note: `${status.system.applications.length} applications reported` }) : ""}
+      ${Array.isArray(status.system?.recentApplicationUsage) ? detailSection("ANDROID USAGE", "Recently active applications", propertyGrid(status.system.recentApplicationUsage), { wide: true, note: status.system.usageAccess ? "Usage access granted" : "Usage access not granted" }) : ""}
       ${detailSection("HISTORY", "Completed scans", renderScanHistory(scan.history), { wide: true, note: `${(scan.history || []).length} recent records` })}
       ${detailSection("CONTAINMENT", "Quarantine inventory", renderQuarantine(status.quarantine), { wide: true, note: "Metadata only—file contents never leave the endpoint" })}
       ${detailSection("ACTIVITY", "Security and audit timeline", renderTimeline(status.events, status.audit), { wide: true })}
@@ -747,6 +779,10 @@ $("#device-dialog").addEventListener("click", async (event) => {
   const device = devices.find((item) => item.id === selectedDeviceId);
   if (type === "client.update" &&
       !window.confirm(`Silently update ${device?.name || "this endpoint"} to the latest signed HQ release?`)) return;
+  if (["device.lock", "device.reboot"].includes(type) &&
+      !window.confirm(`${humanLabel(type)} on ${device?.name || "this endpoint"} now?`)) return;
+  if (type.startsWith("policy.") &&
+      !window.confirm(`Apply ${humanLabel(type)} to ${device?.name || "this endpoint"}?`)) return;
   try {
     button.disabled = true;
     await api(`/api/admin/devices/${selectedDeviceId}/commands`, {

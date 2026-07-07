@@ -1,13 +1,75 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { isIP } from "node:net";
 import { appPaths } from "../constants.js";
 import { ensureDirectory, fileExists } from "./fs-safe.js";
+import { FEED_SOURCES } from "./threat-feeds.js";
 
 let sqliteModule;
 
 async function sqlite() {
   sqliteModule ||= await import("node:sqlite");
   return sqliteModule;
+}
+
+function ipNumber(value) {
+  const family = isIP(value);
+  if (family === 4) {
+    const parts = value.split(".").map(Number);
+    return {
+      family,
+      value: parts.reduce((result, part) => (result << 8n) | BigInt(part), 0n),
+      bits: 32
+    };
+  }
+  if (family !== 6) return null;
+  let normalized = value.toLowerCase().split("%")[0];
+  if (normalized.includes(".")) {
+    const lastColon = normalized.lastIndexOf(":");
+    const ipv4 = ipNumber(normalized.slice(lastColon + 1));
+    if (!ipv4) return null;
+    normalized = `${normalized.slice(0, lastColon)}:${Number(ipv4.value >> 16n).toString(16)}:${Number(ipv4.value & 0xffffn).toString(16)}`;
+  }
+  const halves = normalized.split("::");
+  if (halves.length > 2) return null;
+  const left = halves[0] ? halves[0].split(":") : [];
+  const right = halves[1] ? halves[1].split(":") : [];
+  const missing = 8 - left.length - right.length;
+  if ((halves.length === 1 && missing !== 0) || missing < 0) return null;
+  const groups = [...left, ...Array(missing).fill("0"), ...right];
+  if (groups.length !== 8 || groups.some((part) => !/^[a-f0-9]{1,4}$/i.test(part))) return null;
+  return {
+    family,
+    value: groups.reduce((result, part) => (result << 16n) | BigInt(`0x${part}`), 0n),
+    bits: 128
+  };
+}
+
+export function parseCidr(value) {
+  const [address, prefixText] = String(value || "").split("/");
+  const parsed = ipNumber(address);
+  const prefix = Number(prefixText);
+  if (!parsed || !Number.isInteger(prefix) || prefix < 0 || prefix > parsed.bits) return null;
+  const hostBits = BigInt(parsed.bits - prefix);
+  const mask = hostBits === BigInt(parsed.bits)
+    ? 0n
+    : ((1n << BigInt(parsed.bits)) - 1n) ^ ((1n << hostBits) - 1n);
+  const start = parsed.value & mask;
+  return {
+    family: parsed.family,
+    prefix,
+    start,
+    end: start + ((1n << hostBits) - 1n)
+  };
+}
+
+export function cidrContains(cidr, address) {
+  const range = typeof cidr === "string" ? parseCidr(cidr) : cidr;
+  const parsed = ipNumber(String(address || "").split("%")[0]);
+  return Boolean(
+    range && parsed && range.family === parsed.family &&
+    parsed.value >= range.start && parsed.value <= range.end
+  );
 }
 
 export async function openThreatIndex(options = {}) {
@@ -64,6 +126,23 @@ export async function openThreatIndex(options = {}) {
     WHERE algorithm = ? AND hash = ? AND (size = ? OR size = -1)
     LIMIT 20
   `);
+  let cidrCache = [];
+  let cidrCacheAt = 0;
+  const refreshCidrCache = () => {
+    if (Date.now() - cidrCacheAt < 60000) return;
+    cidrCache = database.prepare(`
+      SELECT type, value, source, name, confidence, first_seen, last_seen, details
+      FROM network_iocs WHERE type IN ('ipv4-cidr', 'ipv6-cidr')
+    `).all().flatMap((row) => {
+      const range = parseCidr(row.value);
+      return range ? [{ row, range }] : [];
+    });
+    cidrCacheAt = Date.now();
+  };
+  const mapIoc = (row) => ({
+    ...row,
+    details: row.details ? JSON.parse(row.details) : null
+  });
   return {
     file,
     database,
@@ -81,13 +160,21 @@ export async function openThreatIndex(options = {}) {
     },
     lookupIoc(value) {
       const raw = String(value).trim();
-      return database.prepare(`
+      const exact = database.prepare(`
         SELECT type, value, source, name, confidence, first_seen, last_seen, details
         FROM network_iocs WHERE value = ? OR value = ? LIMIT 50
-      `).all(raw, raw.toLowerCase()).map((row) => ({
-        ...row,
-        details: row.details ? JSON.parse(row.details) : null
-      }));
+      `).all(raw, raw.toLowerCase());
+      if (isIP(raw.split("%")[0])) {
+        refreshCidrCache();
+        exact.push(...cidrCache
+          .filter(({ range }) => cidrContains(range, raw))
+          .map(({ row }) => row));
+      }
+      const unique = new Map(exact.map((row) => [
+        `${row.type}|${row.value}|${row.source}`,
+        mapIoc(row)
+      ]));
+      return [...unique.values()].slice(0, 50);
     },
     lookupHashValue(value) {
       const hash = String(value).trim().toLowerCase();
@@ -108,7 +195,7 @@ export async function openThreatIndex(options = {}) {
 
 export async function threatIndexStatus() {
   const file = appPaths().threatIndex;
-  const defaults = ["clamav", "malwarebazaar", "urlhaus", "feodotracker", "threatfox"].map((source) => ({
+  const defaults = Object.keys(FEED_SOURCES).map((source) => ({
     source,
     state: "never",
     entryCount: 0,

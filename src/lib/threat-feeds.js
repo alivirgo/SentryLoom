@@ -45,6 +45,34 @@ export const FEED_SOURCES = Object.freeze({
     requiresAuth: true,
     homepage: "https://threatfox.abuse.ch/",
     description: "Vetted malware hashes and network IOCs"
+  },
+  "spamhaus-drop": {
+    id: "spamhaus-drop",
+    name: "Spamhaus DROP",
+    requiresAuth: false,
+    homepage: "https://www.spamhaus.org/blocklists/do-not-route-or-peer/",
+    description: "IPv4 and IPv6 netblocks controlled by criminal operations"
+  },
+  "misp-circl": {
+    id: "misp-circl",
+    name: "CIRCL MISP OSINT",
+    requiresAuth: false,
+    homepage: "https://www.misp-project.org/communities/",
+    description: "Recent public MISP events from CIRCL"
+  },
+  "misp-botvrij": {
+    id: "misp-botvrij",
+    name: "Botvrij MISP OSINT",
+    requiresAuth: false,
+    homepage: "https://www.botvrij.eu/",
+    description: "Recent public MISP events derived from public reporting"
+  },
+  lmd: {
+    id: "lmd",
+    name: "Linux Malware Detect",
+    requiresAuth: false,
+    homepage: "https://rfxn.com/projects/linux-malware-detect",
+    description: "GPLv2 Linux-focused SHA-256 malware signatures"
   }
 });
 
@@ -53,7 +81,16 @@ const SOURCE_HOSTS = Object.freeze({
   malwarebazaar: ["mb-api.abuse.ch"],
   urlhaus: ["urlhaus-api.abuse.ch"],
   feodotracker: ["feodotracker.abuse.ch"],
-  threatfox: ["threatfox-api.abuse.ch"]
+  threatfox: ["threatfox-api.abuse.ch"],
+  "spamhaus-drop": ["www.spamhaus.org"],
+  "misp-circl": ["www.circl.lu"],
+  "misp-botvrij": ["www.botvrij.eu"],
+  lmd: ["cdn.rfxn.com"]
+});
+
+const MISP_FEEDS = Object.freeze({
+  "misp-circl": "https://www.circl.lu/doc/misp/feed-osint/",
+  "misp-botvrij": "https://www.botvrij.eu/data/feed-osint/"
 });
 
 function validateFeedUrl(value, allowedHosts) {
@@ -77,13 +114,18 @@ async function fetchPolicy(url, options, allowedHosts, fetchImpl = fetch) {
 }
 
 export async function fetchJsonFeed(url, options, policy) {
+  const text = await fetchTextFeed(url, options, policy);
+  return JSON.parse(text);
+}
+
+export async function fetchTextFeed(url, options, policy) {
   const response = await fetchPolicy(url, options, policy.allowedHosts, policy.fetchImpl);
   if (!response.ok) throw new Error(`Feed returned HTTP ${response.status}`);
   const declared = Number(response.headers.get("content-length") || 0);
   if (declared > policy.maxBytes) throw new Error("Feed response exceeds the configured size limit");
   const bytes = Buffer.from(await response.arrayBuffer());
   if (bytes.length > policy.maxBytes) throw new Error("Feed response exceeds the configured size limit");
-  return JSON.parse(bytes.toString("utf8"));
+  return bytes.toString("utf8");
 }
 
 export async function downloadFeedFile(url, destination, policy) {
@@ -398,6 +440,381 @@ export function threatFoxEntries(payload) {
     });
   }
   return { hashes, iocs };
+}
+
+export function spamhausDropEntries(text) {
+  const byRange = new Map();
+  const metadata = { records: 0, size: 0, timestamp: 0, terms: null, copyright: null };
+  for (const line of String(text || "").split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    let item;
+    try { item = JSON.parse(line); } catch { continue; }
+    if (item.type === "metadata") {
+      metadata.records += Number(item.records) || 0;
+      metadata.size += Number(item.size) || 0;
+      metadata.timestamp = Math.max(metadata.timestamp, Number(item.timestamp) || 0);
+      metadata.terms ||= item.terms || null;
+      metadata.copyright ||= item.copyright || null;
+      continue;
+    }
+    if (typeof item.cidr !== "string") continue;
+    const [address, prefixText] = item.cidr.split("/");
+    const family = isIP(address);
+    const prefix = Number(prefixText);
+    if (!family || !Number.isInteger(prefix) ||
+        prefix < 0 || prefix > (family === 4 ? 32 : 128)) continue;
+    const type = family === 4 ? "ipv4-cidr" : "ipv6-cidr";
+    const value = `${address.toLowerCase()}/${prefix}`;
+    const existing = byRange.get(`${type}|${value}`);
+    if (existing) {
+      if (item.sblid && !existing.details.sblIds.includes(item.sblid)) {
+        existing.details.sblIds.push(item.sblid);
+      }
+      continue;
+    }
+    byRange.set(`${type}|${value}`, {
+      type,
+      value,
+      source: "spamhaus-drop",
+      name: `Spamhaus.DROP.${item.sblid || "ListedNetblock"}`,
+      confidence: 100,
+      firstSeen: null,
+      lastSeen: null,
+      details: {
+        sblId: item.sblid || null,
+        sblIds: item.sblid ? [item.sblid] : [],
+        rir: item.rir || null,
+        advisory: "drop-all-traffic"
+      }
+    });
+  }
+  return { hashes: [], iocs: [...byRange.values()], metadata };
+}
+
+function mispAttributes(event) {
+  const root = event?.Event || event || {};
+  const attributes = Array.isArray(root.Attribute) ? [...root.Attribute] : [];
+  for (const object of Array.isArray(root.Object) ? root.Object : []) {
+    if (Array.isArray(object.Attribute)) attributes.push(...object.Attribute);
+  }
+  return { root, attributes };
+}
+
+function mispHashEntry(algorithm, hash, name, source, details) {
+  const lengths = { md5: 32, sha1: 40, sha256: 64 };
+  if (!new RegExp(`^[a-f0-9]{${lengths[algorithm]}}$`, "i").test(hash)) return null;
+  return {
+    algorithm,
+    hash: hash.toLowerCase(),
+    size: -1,
+    name,
+    source,
+    severity: "critical",
+    confirmed: true,
+    details
+  };
+}
+
+function mispNetworkEntries(type, value, source, name, confidence, details) {
+  const entries = [];
+  const addIp = (address) => {
+    const family = isIP(address);
+    if (!family) return;
+    entries.push({
+      type: family === 6 ? "ipv6" : "ipv4",
+      value: address.toLowerCase(),
+      source, name, confidence,
+      firstSeen: null, lastSeen: null, details
+    });
+  };
+  if (["ip-src", "ip-dst"].includes(type)) {
+    if (value.includes("/")) {
+      const [address, prefixText] = value.split("/");
+      const family = isIP(address);
+      const prefix = Number(prefixText);
+      if (family && Number.isInteger(prefix) &&
+          prefix >= 0 && prefix <= (family === 4 ? 32 : 128)) {
+        entries.push({
+          type: family === 6 ? "ipv6-cidr" : "ipv4-cidr",
+          value: `${address.toLowerCase()}/${prefix}`,
+          source, name, confidence,
+          firstSeen: null, lastSeen: null, details
+        });
+      }
+    } else {
+      addIp(value);
+    }
+  }
+  else if (["domain", "hostname"].includes(type) && /^[a-z0-9._-]+$/i.test(value)) {
+    entries.push({
+      type: "domain",
+      value: value.toLowerCase().replace(/\.$/, ""),
+      source, name, confidence,
+      firstSeen: null, lastSeen: null, details
+    });
+  } else if (["url", "uri"].includes(type)) {
+    try {
+      const url = new URL(value);
+      if (["http:", "https:"].includes(url.protocol)) {
+        entries.push({
+          type: "url", value: url.toString(), source, name, confidence,
+          firstSeen: null, lastSeen: null, details
+        });
+      }
+    } catch {}
+  } else if (type === "domain|ip") {
+    const [domain, address] = value.split("|");
+    entries.push(...mispNetworkEntries("domain", domain, source, name, confidence, details));
+    addIp(address);
+  } else if (["ip-src|port", "ip-dst|port"].includes(type)) {
+    const [address, portText] = value.split("|");
+    const family = isIP(address);
+    const port = Number(portText);
+    if (family && Number.isInteger(port) && port > 0 && port <= 65535) {
+      entries.push({
+        type: "ip:port",
+        value: family === 6 ? `[${address.toLowerCase()}]:${port}` : `${address}:${port}`,
+        source, name, confidence,
+        firstSeen: null, lastSeen: null, details
+      });
+    }
+  }
+  return entries;
+}
+
+export function mispEntries(events, source) {
+  if (!MISP_FEEDS[source]) throw new Error(`Unknown MISP feed source: ${source}`);
+  const hashes = [];
+  const iocs = [];
+  for (const event of Array.isArray(events) ? events : []) {
+    const { root, attributes } = mispAttributes(event);
+    const threatLevel = Number(root.threat_level_id);
+    const confidence = threatLevel === 1 ? 95 : threatLevel === 2 ? 80 : threatLevel === 3 ? 65 : 55;
+    for (const attribute of attributes) {
+      if (attribute?.to_ids !== true || attribute.deleted === true) continue;
+      const type = String(attribute.type || "").toLowerCase();
+      const value = String(attribute.value || "").trim();
+      if (!value || value.length > 8192) continue;
+      const details = {
+        eventUuid: root.uuid || null,
+        eventInfo: String(root.info || "").slice(0, 500) || null,
+        eventDate: root.date || null,
+        category: attribute.category || null,
+        comment: String(attribute.comment || "").slice(0, 500) || null,
+        attributeUuid: attribute.uuid || null,
+        tags: [
+          ...(Array.isArray(root.Tag) ? root.Tag : []),
+          ...(Array.isArray(attribute.Tag) ? attribute.Tag : [])
+        ].map((tag) => String(tag?.name || tag).slice(0, 120)).filter(Boolean).slice(0, 30)
+      };
+      const name = `MISP.${String(root.info || type || "IOC").replace(/[^\w.-]+/g, "_").slice(0, 120)}`;
+      if (["md5", "sha1", "sha256"].includes(type)) {
+        const entry = mispHashEntry(type, value, name, source, details);
+        if (entry) hashes.push(entry);
+        continue;
+      }
+      const compound = type.match(/^(?:filename|malware-sample)\|(md5|sha1|sha256)$/);
+      if (compound) {
+        const hash = value.slice(value.lastIndexOf("|") + 1);
+        const entry = mispHashEntry(compound[1], hash, name, source, details);
+        if (entry) hashes.push(entry);
+        continue;
+      }
+      iocs.push(...mispNetworkEntries(type, value, source, name, confidence, details));
+    }
+  }
+  return { hashes, iocs };
+}
+
+export function linuxMalwareDetectEntries(text) {
+  const entries = [];
+  for (const line of String(text || "").split(/\r?\n/)) {
+    const match = line.trim().match(/^([a-f0-9]{64}):(\d+):\{SHA256\}(.+)$/i);
+    if (!match) continue;
+    const size = Number(match[2]);
+    if (!Number.isSafeInteger(size) || size < 0) continue;
+    entries.push({
+      algorithm: "sha256",
+      hash: match[1].toLowerCase(),
+      size,
+      name: `LMD.${match[3].slice(0, 240)}`,
+      source: "lmd",
+      severity: "critical",
+      confirmed: true,
+      details: { platformFocus: "linux", signatureFormat: "LMD SHA256 v2" }
+    });
+  }
+  return entries;
+}
+
+function tarHeaderChecksum(header) {
+  const expected = Number.parseInt(
+    header.subarray(148, 156).toString("ascii").replace(/\0.*$/s, "").trim() || "0",
+    8
+  );
+  let actual = 0;
+  for (let index = 0; index < header.length; index += 1) {
+    actual += index >= 148 && index < 156 ? 0x20 : header[index];
+  }
+  if (!Number.isSafeInteger(expected) || expected !== actual) {
+    throw new Error("TAR entry checksum is invalid");
+  }
+}
+
+export async function extractTarTextFiles(file, requestedNames, maximumBytes = 32 * 1024 * 1024) {
+  const requested = new Set(requestedNames);
+  const found = new Map();
+  const input = fs.createReadStream(file).pipe(createGunzip());
+  let buffer = Buffer.alloc(0);
+  let state = { mode: "header" };
+
+  for await (const chunk of input) {
+    buffer = buffer.length ? Buffer.concat([buffer, chunk]) : chunk;
+    while (buffer.length) {
+      if (state.mode === "header") {
+        if (buffer.length < 512) break;
+        const header = buffer.subarray(0, 512);
+        buffer = buffer.subarray(512);
+        if (header.every((byte) => byte === 0)) {
+          buffer = Buffer.alloc(0);
+          break;
+        }
+        tarHeaderChecksum(header);
+        const name = header.subarray(0, 100).toString("utf8").replace(/\0.*$/s, "");
+        const prefix = header.subarray(345, 500).toString("utf8").replace(/\0.*$/s, "");
+        const fullName = prefix ? `${prefix}/${name}` : name;
+        const size = Number.parseInt(
+          header.subarray(124, 136).toString("ascii").replace(/\0.*$/s, "").trim() || "0",
+          8
+        );
+        if (!Number.isSafeInteger(size) || size < 0) throw new Error("TAR entry size is invalid");
+        const target = requested.has(fullName);
+        if (target && size > maximumBytes) throw new Error(`TAR entry is too large: ${fullName}`);
+        state = {
+          mode: "file",
+          name: fullName,
+          remaining: size,
+          padding: (512 - (size % 512)) % 512,
+          target,
+          chunks: []
+        };
+        if (size === 0) {
+          if (target) found.set(fullName, "");
+          state.mode = state.padding ? "padding" : "header";
+        }
+      } else if (state.mode === "file") {
+        const take = Math.min(state.remaining, buffer.length);
+        const portion = buffer.subarray(0, take);
+        buffer = buffer.subarray(take);
+        state.remaining -= take;
+        if (state.target) state.chunks.push(portion);
+        if (state.remaining === 0) {
+          if (state.target) found.set(state.name, Buffer.concat(state.chunks).toString("utf8"));
+          state.mode = state.padding ? "padding" : "header";
+        }
+      } else {
+        const take = Math.min(state.padding, buffer.length);
+        buffer = buffer.subarray(take);
+        state.padding -= take;
+        if (state.padding === 0) state = { mode: "header" };
+      }
+    }
+  }
+  if (state.mode === "file" && state.remaining) throw new Error("TAR archive is truncated");
+  for (const name of requested) {
+    if (!found.has(name)) throw new Error(`TAR archive does not contain ${name}`);
+  }
+  return found;
+}
+
+export async function fetchSpamhausDrop(config, fetchImpl) {
+  const options = {
+    method: "GET",
+    headers: { "User-Agent": `SentryLoom/${APP_VERSION}` },
+    signal: AbortSignal.timeout(config.requestTimeoutMs)
+  };
+  const policy = {
+    allowedHosts: SOURCE_HOSTS["spamhaus-drop"],
+    maxBytes: 10 * 1024 * 1024,
+    fetchImpl
+  };
+  const [ipv4, ipv6] = await Promise.all([
+    fetchTextFeed("https://www.spamhaus.org/drop/drop_v4.json", options, policy),
+    fetchTextFeed("https://www.spamhaus.org/drop/drop_v6.json", options, policy)
+  ]);
+  return `${ipv4}\n${ipv6}`;
+}
+
+function mispManifestTimestamp(item) {
+  const numeric = Number(item?.publish_timestamp || item?.timestamp);
+  if (Number.isFinite(numeric) && numeric > 0) return numeric * 1000;
+  const parsed = Date.parse(item?.date || "");
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export async function fetchMispOsint(
+  config,
+  source,
+  fetchImpl,
+  maximumEvents = 20,
+  onProgress = () => {}
+) {
+  const base = MISP_FEEDS[source];
+  if (!base) throw new Error(`Unknown MISP feed source: ${source}`);
+  const policy = { allowedHosts: SOURCE_HOSTS[source], maxBytes: 20 * 1024 * 1024, fetchImpl };
+  const get = (url) => fetchJsonFeed(url, {
+    method: "GET",
+    headers: { "User-Agent": `SentryLoom/${APP_VERSION}` },
+    signal: AbortSignal.timeout(config.requestTimeoutMs)
+  }, policy);
+  const manifest = await get(`${base}manifest.json`);
+  const selected = Object.entries(manifest)
+    .filter(([uuid]) => /^[a-f0-9-]{36}$/i.test(uuid))
+    .sort((left, right) => mispManifestTimestamp(right[1]) - mispManifestTimestamp(left[1]))
+    .slice(0, Math.max(1, Math.min(50, maximumEvents)));
+  const events = [];
+  for (let index = 0; index < selected.length; index += 1) {
+    const [uuid] = selected[index];
+    onProgress({
+      source,
+      phase: "download",
+      message: `Fetching MISP event ${index + 1} of ${selected.length}`,
+      received: index + 1,
+      total: selected.length
+    });
+    events.push(await get(`${base}${uuid}.json`));
+  }
+  return {
+    events,
+    manifestEntries: Object.keys(manifest).length,
+    fetchedEvents: events.length,
+    newestTimestamp: selected.length ? new Date(mispManifestTimestamp(selected[0][1])).toISOString() : null
+  };
+}
+
+export async function downloadLinuxMalwareDetect(config, onProgress, fetchImpl) {
+  const destination = path.join(appPaths().threatArtifacts, "maldet-sigpack.tgz");
+  onProgress({ source: "lmd", phase: "download", message: "Downloading Linux Malware Detect signatures" });
+  const download = await downloadFeedFile(
+    "https://cdn.rfxn.com/downloads/maldet-sigpack.tgz",
+    destination,
+    {
+      allowedHosts: SOURCE_HOSTS.lmd,
+      maxBytes: 64 * 1024 * 1024,
+      timeoutMs: Math.max(config.requestTimeoutMs, 120000),
+      fetchImpl,
+      onProgress
+    }
+  );
+  const files = await extractTarTextFiles(destination, [
+    "sigs/sha256v2.dat",
+    "sigs/maldet.sigs.ver"
+  ]);
+  return {
+    entries: linuxMalwareDetectEntries(files.get("sigs/sha256v2.dat")),
+    version: files.get("sigs/maldet.sigs.ver").trim().slice(0, 100),
+    download
+  };
 }
 
 export async function downloadClamDatabases(config, onProgress, fetchImpl) {

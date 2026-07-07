@@ -12,12 +12,12 @@ import { openThreatIndex } from "./threat-index.js";
 import { runPowerShell } from "./windows-monitoring.js";
 import {
   discoverRemovableDrives,
-  readAuthenticodeStatus,
+  readExecutableTrustStatus,
   readFirewallSnapshot,
   readPersistenceSnapshot,
   readProcessSnapshot,
-  readWindowsSecurityEvents
-} from "./windows-telemetry.js";
+  readSecurityEvents
+} from "./platform-telemetry.js";
 
 function stableValue(value) {
   const canonical = (item) => {
@@ -109,7 +109,7 @@ export class AdvancedMonitoring {
     }
     if (this.config.monitoring.windowsEventsEnabled) {
       this.eventsSince = new Date().toISOString();
-      this.schedule("windowsEvents", 1000, this.config.monitoring.eventPollIntervalMs, () => this.pollWindowsEvents());
+      this.schedule("securityEvents", 1000, this.config.monitoring.eventPollIntervalMs, () => this.pollSecurityEvents());
     }
     if (this.config.monitoring.ransomwareEnabled) await this.initializeCanaries();
     if (this.config.monitoring.removableMediaEnabled) {
@@ -168,7 +168,7 @@ export class AdvancedMonitoring {
     }
     let signature = this.authenticodeCache.get(file.toLowerCase());
     if (!signature) {
-      signature = await readAuthenticodeStatus(file);
+      signature = await readExecutableTrustStatus(file);
       this.authenticodeCache.set(file.toLowerCase(), signature);
       if (this.authenticodeCache.size > 2000) this.authenticodeCache.delete(this.authenticodeCache.keys().next().value);
     }
@@ -218,18 +218,23 @@ export class AdvancedMonitoring {
     this.persistenceBaseline = next;
   }
 
-  async pollWindowsEvents() {
+  async pollSecurityEvents() {
     const now = new Date().toISOString();
-    const events = await readWindowsSecurityEvents(this.eventsSince);
+    const events = await readSecurityEvents(this.eventsSince);
     this.eventsSince = new Date(Date.now() - 2000).toISOString();
     for (const event of events) {
       const key = `${event.log}|${event.recordId}`;
       if (this.seenSecurityEvents.has(key)) continue;
       this.seenSecurityEvents.add(key);
       this.securityEvents += 1;
-      this.onEvent({ type: "windows.security-event", event });
+      const eventType = process.platform === "win32"
+        ? "windows.security-event"
+        : process.platform === "darwin"
+          ? "macos.security-event"
+          : "linux.security-event";
+      this.onEvent({ type: eventType, event });
       if (event.level <= 2 || [1116, 1117, 5001, 3077, 4697, 7045].includes(event.eventId)) {
-        await appendAudit("windows.security-event", {
+        await appendAudit(eventType, {
           log: event.log,
           eventId: event.eventId,
           level: event.level,
@@ -239,7 +244,7 @@ export class AdvancedMonitoring {
       }
     }
     if (this.seenSecurityEvents.size > 5000) this.seenSecurityEvents = new Set([...this.seenSecurityEvents].slice(-2500));
-    this.lastPolls.windowsEvents = now;
+    this.lastPolls.securityEvents = now;
   }
 
   canaryTargets() {

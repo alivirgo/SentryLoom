@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { APP_NAME, APP_VERSION, appPaths } from "./constants.js";
 import { validDashboardPage } from "./lib/ui-command.js";
 import { normalizeFingerprint, normalizeHqUrl } from "./lib/hq-client.js";
+import { FEED_SOURCES } from "./lib/threat-feeds.js";
 
 const directory = path.dirname(fileURLToPath(import.meta.url));
 const publicDirectory = path.join(directory, "ui");
@@ -289,13 +290,13 @@ export function createDashboardServer(engine, options = {}) {
             return;
           }
           const sources = Array.isArray(body.sources)
-            ? body.sources.filter((item) => typeof item === "string").slice(0, 5)
+            ? body.sources.filter((item) => typeof item === "string").slice(0, 12)
             : undefined;
           engine.updateThreatIntel(sources, { force: Boolean(body.force) })
             .catch((error) => engine.emit({ type: "threat-intel.error", error: error.message }));
           json(response, 202, {
             accepted: true,
-            sources: sources || ["clamav", "malwarebazaar", "urlhaus", "feodotracker", "threatfox"]
+            sources: sources || Object.keys(FEED_SOURCES)
           });
           return;
         }

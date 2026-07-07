@@ -76,7 +76,7 @@ export class RealtimeProtection {
     for (const target of targets) {
       try {
         if (!(await fsp.stat(target)).isDirectory()) continue;
-        const watcher = fs.watch(target, { recursive: process.platform === "win32" }, (_event, filename) => {
+        const watcher = fs.watch(target, { recursive: true }, (_event, filename) => {
           if (!filename) return;
           this.queue(path.join(target, String(filename)));
         });
@@ -91,7 +91,7 @@ export class RealtimeProtection {
         if ((await fsp.stat(this.downloadsTarget)).isDirectory()) {
           this.downloadWatcher = fs.watch(
             this.downloadsTarget,
-            { recursive: process.platform === "win32" },
+            { recursive: true },
             (_event, filename) => {
               if (!filename) return;
               this.queue(path.join(this.downloadsTarget, String(filename)), { deep: true });

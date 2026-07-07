@@ -4,7 +4,7 @@ import {
   discoverRemovableDrives,
   readPersistenceSnapshot,
   readProcessSnapshot
-} from "./windows-telemetry.js";
+} from "./platform-telemetry.js";
 
 const ACTIVE_EXTENSION = /\.(?:exe|com|scr|cpl|dll|sys|bat|cmd|ps1|vbs|vbe|js|jse|hta|lnk)$/i;
 const EMBEDDED_PATH = /"([^"]+\.(?:exe|com|scr|cpl|dll|sys|bat|cmd|ps1|vbs|vbe|js|jse|hta|lnk))"|((?:[a-z]:\\|\\\\)[^|"'`\r\n]+?\.(?:exe|com|scr|cpl|dll|sys|bat|cmd|ps1|vbs|vbe|js|jse|hta|lnk))/gi;
@@ -12,7 +12,8 @@ const EMBEDDED_PATH = /"([^"]+\.(?:exe|com|scr|cpl|dll|sys|bat|cmd|ps1|vbs|vbe|j
 function normalizeCandidate(value) {
   if (typeof value !== "string") return null;
   const candidate = value.trim().replace(/^"+|"+$/g, "");
-  if (!candidate || candidate.length > 32767 || !ACTIVE_EXTENSION.test(candidate)) return null;
+  const unixExecutable = process.platform !== "win32" && candidate.startsWith("/");
+  if (!candidate || candidate.length > 32767 || (!ACTIVE_EXTENSION.test(candidate) && !unixExecutable)) return null;
   return path.normalize(candidate);
 }
 
@@ -24,6 +25,10 @@ export function persistenceExecutableCandidates(items) {
       if (candidate) candidates.add(candidate);
     }
     const raw = typeof item?.value === "string" ? item.value : JSON.stringify(item?.value ?? "");
+    if (process.platform !== "win32") {
+      const direct = normalizeCandidate(raw.split(/\s+/)[0]);
+      if (direct) candidates.add(direct);
+    }
     for (const match of raw.matchAll(EMBEDDED_PATH)) {
       const candidate = normalizeCandidate(match[1] || match[2]);
       if (candidate) candidates.add(candidate);

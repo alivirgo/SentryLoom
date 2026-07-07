@@ -11,7 +11,11 @@ permissions:
 
 jobs:
   test:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -22,3 +26,24 @@ jobs:
         run: node tools/secret-audit.js
       - name: Syntax and test suite
         run: npm run check
+
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - name: Build and lint Android client
+        working-directory: clients/android
+        run: ./gradlew lintDebug testDebugUnitTest assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SentryLoom-Android-debug
+          path: clients/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

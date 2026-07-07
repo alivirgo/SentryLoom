@@ -1,5 +1,11 @@
 # Enterprise feature matrix
 
+Platform detail and permission boundaries are documented in
+[`CROSS-PLATFORM-CLIENTS.md`](CROSS-PLATFORM-CLIENTS.md). Desktop rows apply to
+Windows, Linux, and macOS where the operating system exposes the required
+user-mode API; Android uses the separate ownership-aware controls listed
+below.
+
 | Capability | Current state | Notes |
 |---|---|---|
 | Offline on-demand scanning | Implemented | Quick, full, custom file/folder, startup targets, active process images, removable drives |
@@ -22,8 +28,8 @@
 | Realtime quarantine UI | Implemented | Table synchronizes when the count changes and whenever the tab opens |
 | Actionable detection notifications | Implemented | Windows alert for file, scan, process, network, ransomware, and Defender detections; click opens Quarantine |
 | Offline signed updates | Implemented | Ed25519 trust store and import |
-| Community threat feeds | Implemented | ClamAV, MalwareBazaar, URLhaus, Feodo Tracker, ThreatFox |
-| Network IOC index | Implemented | IP, domain, URL, and IP:port lookup; no automatic blocking |
+| Community threat feeds | Implemented | ClamAV, MalwareBazaar, URLhaus, Feodo Tracker, ThreatFox, Spamhaus DROP, CIRCL/Botvrij MISP OSINT, Linux Malware Detect |
+| Network IOC index | Implemented | IP, CIDR, domain, URL, and IP:port lookup; no automatic blocking |
 | Manual update controls | Implemented | Per-source and update-all dashboard buttons |
 | Audit trail | Implemented | HMAC-chained JSONL |
 | Scheduling | Implemented | Windows Task Scheduler |
@@ -51,3 +57,14 @@
 | Malware reputation/intelligence | Not implemented | Offline curated feed required |
 | Enterprise fleet console | Implemented (initial) | Optional on-premises SentryLoom HQ; standalone mode remains fully supported |
 | Independent certification | Not completed | Requires external labs and operational maturity |
+| Linux service and telemetry | Implemented | systemd service; process, persistence, journal, removable media, firewall, TCP, hardware, storage, and network inventory |
+| macOS service and telemetry | Implemented | launchd service; process, LaunchAgent/Daemon, unified log, removable media, firewall, TCP, code-signing, hardware, and storage inventory |
+| Cross-platform command negotiation | Implemented | Endpoint advertises supported commands; HQ disables and rejects incompatible actions |
+| Android system/app inventory | Implemented | Hardware, OS/build/patch, battery, memory, storage, network/private DNS/proxy, installed applications, signer hashes, permissions, usage, ownership, and APK hashes |
+| Android protection/event telemetry | Implemented | Persistent package/network monitoring, posture checks, tamper-evident events, scan history, command audit, and HQ diagnostics |
+| Android remote lock | Implemented (permission-gated) | Requires user-approved Device Administrator or enterprise owner state |
+| Android Bluetooth-sharing policy | Implemented (permission-gated) | Requires Profile Owner or Device Owner |
+| Android enterprise restrictions | Implemented (permission-gated) | Camera, screen capture, unknown sources, safe boot, factory reset, and USB data signaling depend on Profile/Device Owner capabilities |
+| Android remote reboot | Implemented (permission-gated) | Requires Device Owner; HQ asks for administrator confirmation |
+| Android arbitrary personal-file scan | Platform-limited | Scoped storage requires user-granted document/folder access |
+| Android remote wipe | Not implemented by design | Destructive deprovisioning needs a separately authorized enterprise workflow |

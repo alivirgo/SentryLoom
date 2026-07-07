@@ -5,7 +5,7 @@
 <h1 align="center">SentryLoom</h1>
 
 <p align="center">
-  Open-source, offline-first Windows endpoint security with local antivirus
+  Open-source, offline-first cross-platform endpoint security with local antivirus
   scanning, behavioral monitoring, encrypted quarantine, community threat
   intelligence, and optional on-premises fleet management.
 </p>
@@ -14,11 +14,11 @@
   <a href="https://github.com/alivirgo/SentryLoom/actions/workflows/test.yml"><img alt="Tests" src="https://github.com/alivirgo/SentryLoom/actions/workflows/test.yml/badge.svg"></a>
   <a href="https://github.com/alivirgo/SentryLoom/actions/workflows/codeql.yml"><img alt="CodeQL" src="https://github.com/alivirgo/SentryLoom/actions/workflows/codeql.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="Apache 2.0 license" src="https://img.shields.io/badge/license-Apache--2.0-blue"></a>
-  <img alt="Windows" src="https://img.shields.io/badge/platform-Windows-0078D4">
+  <img alt="Platforms" src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20Android-0078D4">
   <img alt="Node.js 24+" src="https://img.shields.io/badge/Node.js-24%2B-339933">
 </p>
 
-SentryLoom is a transparent Windows antivirus, endpoint detection and response
+SentryLoom is a transparent endpoint-security and response
 (EDR) learning platform, local malware scanner, ransomware monitor, and
 self-hosted security operations console. It is designed for people, labs,
 small businesses, schools, security researchers, and organizations that want
@@ -32,12 +32,13 @@ Management and operations resources:
 - [Management presentation](docs/management/SentryLoom-Management-Presentation.pptx)
 - [Complete endpoint and HQ user guide](docs/guides/SentryLoom-Complete-User-Guide.docx)
 - [Connection resilience test plan](docs/CONNECTION-RESILIENCE.md)
+- [Linux, macOS, and Android clients](docs/CROSS-PLATFORM-CLIENTS.md)
 
 > [!IMPORTANT]
 > SentryLoom is an actively developed user-mode security project, not a
-> certified replacement for Microsoft Defender or a mature commercial EDR.
-> Keep Defender, Windows Firewall, SmartScreen, UAC, Secure Boot, and BitLocker
-> enabled. Read [SECURITY.md](SECURITY.md) before production deployment.
+> certified replacement for the operating system's built-in security stack or
+> a mature commercial EDR. Keep platform protections enabled. Read
+> [SECURITY.md](SECURITY.md) before production deployment.
 
 ## Why SentryLoom
 
@@ -95,6 +96,9 @@ Management and operations resources:
 - URLhaus payload hashes.
 - Feodo Tracker botnet command-and-control indicators.
 - ThreatFox hashes, domains, URLs, IPs, and IP:port indicators.
+- Spamhaus DROP IPv4/IPv6 criminal netblocks with native CIDR matching.
+- CIRCL and Botvrij public MISP OSINT hashes and network indicators.
+- Linux Malware Detect GPLv2 SHA-256 signatures.
 - Disk-backed SQLite indexes suitable for millions of exact indicators.
 
 Standalone provider credentials are entered by the operator and encrypted
@@ -102,6 +106,9 @@ locally. Managed deployments keep the abuse.ch Auth-Key only on HQ under
 Windows DPAPI; clients authenticate to the certificate-pinned HQ gateway and
 never receive the key. No provider credential is stored in source control.
 Each provider retains its own data license and usage terms.
+See [threat-intelligence source policy](docs/THREAT-INTELLIGENCE-SOURCES.md)
+for included sources, safety rules, and providers that cannot truthfully be
+described as free and unlimited.
 
 ### SentryLoom HQ
 

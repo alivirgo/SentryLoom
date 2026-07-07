@@ -11,7 +11,12 @@ import {
   fetchFeodoTracker,
   feodoTrackerEntries,
   fetchThreatFox,
-  threatFoxEntries
+  threatFoxEntries,
+  fetchSpamhausDrop,
+  spamhausDropEntries,
+  fetchMispOsint,
+  mispEntries,
+  downloadLinuxMalwareDetect
 } from "./threat-feeds.js";
 import { fetchHqThreatFeed } from "./hq-client.js";
 
@@ -294,6 +299,122 @@ async function updateThreatFox(database, writer, context) {
   }
 }
 
+async function updateSpamhausDrop(database, writer, context) {
+  const entries = spamhausDropEntries(
+    await fetchSpamhausDrop(context.config, context.fetchImpl)
+  );
+  const timestamp = now();
+  database.exec("BEGIN IMMEDIATE");
+  try {
+    database.prepare("DELETE FROM network_iocs WHERE source = 'spamhaus-drop'").run();
+    for (const entry of entries.iocs) writer.insertIoc(entry, timestamp);
+    const entryCount = writer.count("spamhaus-drop");
+    writer.status("spamhaus-drop", {
+      state: "ready",
+      lastAttempt: context.startedAt,
+      lastSuccess: timestamp,
+      version: entries.metadata?.timestamp
+        ? new Date(Number(entries.metadata.timestamp) * 1000).toISOString()
+        : timestamp.slice(0, 10),
+      entryCount,
+      lastImportCount: entries.iocs.length,
+      metadata: {
+        list: "DROP IPv4 and IPv6",
+        records: entries.metadata?.records || entries.iocs.length,
+        terms: entries.metadata?.terms || "https://www.spamhaus.org/drop/terms/",
+        advisory: "CIDR matches are report-only unless IOC blocking is explicitly enabled"
+      }
+    });
+    database.exec("COMMIT");
+    return { source: "spamhaus-drop", imported: entries.iocs.length, entryCount };
+  } catch (error) {
+    database.exec("ROLLBACK");
+    throw error;
+  }
+}
+
+async function updateMisp(database, writer, context, source) {
+  const payload = await fetchMispOsint(
+    context.config,
+    source,
+    context.fetchImpl,
+    20,
+    context.onProgress
+  );
+  const entries = mispEntries(payload.events, source);
+  const timestamp = now();
+  database.exec("BEGIN IMMEDIATE");
+  try {
+    for (const entry of entries.hashes) writer.insert(entry, timestamp);
+    for (const entry of entries.iocs) writer.insertIoc(entry, timestamp);
+    database.prepare("DELETE FROM threat_hashes WHERE source = ? AND updated_at < datetime('now', '-180 days')")
+      .run(source);
+    database.prepare("DELETE FROM network_iocs WHERE source = ? AND updated_at < datetime('now', '-180 days')")
+      .run(source);
+    const imported = entries.hashes.length + entries.iocs.length;
+    const entryCount = writer.count(source);
+    writer.status(source, {
+      state: "ready",
+      lastAttempt: context.startedAt,
+      lastSuccess: timestamp,
+      version: payload.newestTimestamp || timestamp.slice(0, 10),
+      entryCount,
+      lastImportCount: imported,
+      metadata: {
+        format: "MISP",
+        manifestEntries: payload.manifestEntries,
+        fetchedEvents: payload.fetchedEvents,
+        retainedDays: 180,
+        hashes: entries.hashes.length,
+        networkIocs: entries.iocs.length
+      }
+    });
+    database.exec("COMMIT");
+    return {
+      source, imported, entryCount,
+      hashes: entries.hashes.length,
+      networkIocs: entries.iocs.length
+    };
+  } catch (error) {
+    database.exec("ROLLBACK");
+    throw error;
+  }
+}
+
+async function updateLinuxMalwareDetect(database, writer, context) {
+  const payload = await downloadLinuxMalwareDetect(
+    context.config,
+    context.onProgress,
+    context.fetchImpl
+  );
+  const timestamp = now();
+  database.exec("BEGIN IMMEDIATE");
+  try {
+    database.prepare("DELETE FROM threat_hashes WHERE source = 'lmd'").run();
+    for (const entry of payload.entries) writer.insert(entry, timestamp);
+    const entryCount = writer.count("lmd");
+    writer.status("lmd", {
+      state: "ready",
+      lastAttempt: context.startedAt,
+      lastSuccess: timestamp,
+      version: payload.version,
+      entryCount,
+      lastImportCount: payload.entries.length,
+      metadata: {
+        license: "GPL-2.0",
+        platformFocus: "Linux",
+        algorithm: "SHA-256",
+        artifactBytes: payload.download.bytes
+      }
+    });
+    database.exec("COMMIT");
+    return { source: "lmd", imported: payload.entries.length, entryCount, version: payload.version };
+  } catch (error) {
+    database.exec("ROLLBACK");
+    throw error;
+  }
+}
+
 export async function updateThreatFeeds(options) {
   const sources = normalizeSources(options.sources);
   const results = [];
@@ -320,7 +441,10 @@ export async function updateThreatFeeds(options) {
         else if (source === "malwarebazaar") result = await updateMalwareBazaar(database, writer, context);
         else if (source === "urlhaus") result = await updateUrlhaus(database, writer, context);
         else if (source === "feodotracker") result = await updateFeodoTracker(database, writer, context);
-        else result = await updateThreatFox(database, writer, context);
+        else if (source === "threatfox") result = await updateThreatFox(database, writer, context);
+        else if (source === "spamhaus-drop") result = await updateSpamhausDrop(database, writer, context);
+        else if (source === "lmd") result = await updateLinuxMalwareDetect(database, writer, context);
+        else result = await updateMisp(database, writer, context, source);
         results.push({ ...result, ok: true });
         options.onProgress?.({ source, phase: "complete", message: `${FEED_SOURCES[source].name} updated`, ...result });
       } catch (error) {

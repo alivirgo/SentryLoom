@@ -37,8 +37,8 @@ import {
   RECOMMENDED_PROTECTION_CONFIG
 } from "./security-posture.js";
 import { setUsbStorageBlocked, usbStorageStatus } from "./windows-usb-control.js";
-import { showWindowsPathPicker } from "./windows-path-picker.js";
-import { notificationForEvent, showDetectionNotification } from "./windows-notifications.js";
+import { showPlatformPathPicker } from "./platform-path-picker.js";
+import { notificationForEvent, showDetectionNotification } from "./platform-notifications.js";
 import { consumeUiCommand } from "./ui-command.js";
 import {
   acquireHqConnectorLease,
@@ -62,6 +62,8 @@ import { getDeviceIdentity } from "./device-identity.js";
 import { getClientUpdateStatus, stageClientUpdate } from "./client-update.js";
 import { readJson, writeJsonAtomic } from "./fs-safe.js";
 import { collectWakeNetworkInterfaces } from "./network-identity.js";
+import { platformDescriptor, supportedCommands } from "./platform-capabilities.js";
+import { collectSystemInformation } from "./system-information.js";
 
 const HQ_SENSITIVE_FIELD = /(?:password|secret|token|authkey|credential|masterkey|privatekey|controller)/i;
 
@@ -529,7 +531,9 @@ export class AntivirusEngine {
         firewallEnforcement: {
           enabled: this.config.monitoring.firewallBlockHighConfidence,
           blockedThisSession: this.firewallBlocks,
-          implementation: "Windows Defender Firewall (WFP)"
+          implementation: process.platform === "win32"
+            ? "Windows Defender Firewall (WFP)"
+            : process.platform === "linux" ? "Linux nftables" : "Platform firewall monitoring"
         },
         running: Boolean(this.protection?.running),
         watchers: this.protection?.watchers.length || 0
@@ -756,6 +760,13 @@ export class AntivirusEngine {
   }
 
   async getHqTelemetry() {
+    const systemPromise = this.systemTelemetry &&
+      Date.now() - this.systemTelemetry.collectedAt < 60000
+      ? Promise.resolve(this.systemTelemetry.value)
+      : collectSystemInformation().then((value) => {
+        this.systemTelemetry = { collectedAt: Date.now(), value };
+        return value;
+      });
     const controlTelemetry = this.hqControlTelemetry &&
       Date.now() - this.hqControlTelemetry.collectedAt < 15000
       ? this.hqControlTelemetry.value
@@ -768,13 +779,14 @@ export class AntivirusEngine {
         this.hqControlTelemetry = { collectedAt: Date.now(), value };
         return value;
       });
-    const [status, identity, quarantine, history, audit, clientUpdate] = await Promise.all([
+    const [status, identity, quarantine, history, audit, clientUpdate, system] = await Promise.all([
       this.getStatus({ consumeNavigation: false }),
       getDeviceIdentity(),
       listQuarantine(),
       readScanHistory(20),
       readRecentAudit(50),
-      getClientUpdateStatus()
+      getClientUpdateStatus(),
+      systemPromise
     ]);
     return {
       schemaVersion: 2,
@@ -785,8 +797,14 @@ export class AntivirusEngine {
         hostname: identity.hostname,
         platform: identity.platform,
         appVersion: APP_VERSION,
-        networkInterfaces: collectWakeNetworkInterfaces()
+        networkInterfaces: collectWakeNetworkInterfaces(),
+        ...platformDescriptor()
       },
+      capabilities: {
+        features: platformDescriptor().capabilities,
+        commands: supportedCommands()
+      },
+      system: sanitizeHqValue(system),
       security: {
         score: status.posture.score,
         grade: status.posture.grade,
@@ -873,6 +891,9 @@ export class AntivirusEngine {
 
   async executeHqCommand(command) {
     const type = command.type;
+    if (!supportedCommands().includes(type)) {
+      throw new Error(`HQ command ${type} is not supported on ${process.platform}`);
+    }
     if (type.startsWith("scan.") && type !== "scan.cancel") {
       const scanType = type.slice("scan.".length);
       const result = await this.runScan(scanType);
@@ -996,7 +1017,7 @@ export class AntivirusEngine {
   }
 
   async chooseScanTarget(kind) {
-    return { path: await showWindowsPathPicker(kind), kind };
+    return { path: await showPlatformPathPicker(kind), kind };
   }
 
   async lookupReputation(value) {

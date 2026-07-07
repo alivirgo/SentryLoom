@@ -307,6 +307,30 @@
               <span class="feed-count" id="feed-count-threatfox">0 indicators</span>
               <button class="secondary feed-update" data-update-feed="threatfox">Update ThreatFox</button>
             </div>
+            <div class="feed-card" data-feed="spamhaus-drop">
+              <div><strong>Spamhaus DROP</strong><small>Criminal IPv4/IPv6 netblocks with CIDR matching</small></div>
+              <span class="feed-status" id="feed-state-spamhaus-drop">Never updated</span>
+              <span class="feed-count" id="feed-count-spamhaus-drop">0 indicators</span>
+              <button class="secondary feed-update" data-update-feed="spamhaus-drop">Update Spamhaus</button>
+            </div>
+            <div class="feed-card" data-feed="misp-circl">
+              <div><strong>CIRCL MISP OSINT</strong><small>Public MISP hashes, domains, URLs, and IP IOCs</small></div>
+              <span class="feed-status" id="feed-state-misp-circl">Never updated</span>
+              <span class="feed-count" id="feed-count-misp-circl">0 indicators</span>
+              <button class="secondary feed-update" data-update-feed="misp-circl">Update CIRCL MISP</button>
+            </div>
+            <div class="feed-card" data-feed="misp-botvrij">
+              <div><strong>Botvrij MISP OSINT</strong><small>Public-report MISP threat intelligence</small></div>
+              <span class="feed-status" id="feed-state-misp-botvrij">Never updated</span>
+              <span class="feed-count" id="feed-count-misp-botvrij">0 indicators</span>
+              <button class="secondary feed-update" data-update-feed="misp-botvrij">Update Botvrij</button>
+            </div>
+            <div class="feed-card" data-feed="lmd">
+              <div><strong>Linux Malware Detect</strong><small>GPLv2 Linux-focused SHA-256 signatures</small></div>
+              <span class="feed-status" id="feed-state-lmd">Never updated</span>
+              <span class="feed-count" id="feed-count-lmd">0 indicators</span>
+              <button class="secondary feed-update" data-update-feed="lmd">Update LMD</button>
+            </div>
           </div>
           <div class="credential-row">
             <div>
@@ -320,7 +344,11 @@
             <div class="progress-track"><div id="update-progress-bar"></div></div>
             <p class="mono" id="update-progress-text">Preparing update…</p>
           </div>
-          <p class="terms-note">ClamAV signatures are downloaded from clamav.net. MalwareBazaar, URLhaus, ThreatFox, and Feodo Tracker are provided by abuse.ch/Spamhaus under their applicable terms. Network IOCs are indexed locally; automatic blocking remains opt-in.</p>
+          <p class="terms-note">Feeds are downloaded only from allowlisted HTTPS origins. Spamhaus DROP remains subject to its fair-use terms; CIRCL and Botvrij provide public MISP feeds; Linux Malware Detect signatures are GPLv2. VirusTotal and AndroZoo are not bundled because their free access is limited, and live malware repositories are never downloaded. Network blocking remains opt-in.</p>
+          <details class="terms-note">
+            <summary>Restricted and sample-based sources</summary>
+            <p>VirusTotal has API quotas and public-API usage restrictions. AndroZoo is academic-only, capped, expiring, non-commercial, and non-redistributable. theZoo contains live malware rather than a maintained IOC feed. SentryLoom deliberately excludes these sources instead of putting malware samples or misleading “unlimited” claims on managed endpoints.</p>
+          </details>
         </article>
       </section>
     </main>

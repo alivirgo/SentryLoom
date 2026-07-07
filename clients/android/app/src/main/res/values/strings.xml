@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">SentryLoom</string>
+    <string name="device_admin_description">Allows an administrator to lock this managed device. Reboot and enterprise restrictions require Device Owner provisioning.</string>
+</resources>

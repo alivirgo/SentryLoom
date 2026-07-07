@@ -9,6 +9,9 @@ export function dataDirectory() {
   if (process.platform === "win32" && process.env.PROGRAMDATA) {
     return path.join(process.env.PROGRAMDATA, "SentryLoom");
   }
+  if (process.platform === "darwin") {
+    return path.join(os.homedir(), "Library", "Application Support", "SentryLoom");
+  }
   const base = process.env.LOCALAPPDATA || path.join(os.homedir(), ".local", "share");
   return path.join(base, "SentryLoom");
 }
@@ -117,7 +120,11 @@ export const DEFAULT_CONFIG = Object.freeze({
       malwarebazaar: true,
       urlhaus: true,
       feodotracker: true,
-      threatfox: true
+      threatfox: true,
+      "spamhaus-drop": true,
+      "misp-circl": true,
+      "misp-botvrij": true,
+      lmd: true
     },
     requestTimeoutMs: 120000,
     minimumUpdateIntervalMinutes: 15

@@ -9,6 +9,7 @@ import { importSignedBundle, trustSignatureKey, signatureStatus } from "./lib/si
 import { verifyAuditLog } from "./lib/audit-log.js";
 import { appPaths, APP_NAME, APP_VERSION } from "./constants.js";
 import { openThreatIndex } from "./lib/threat-index.js";
+import { FEED_SOURCES } from "./lib/threat-feeds.js";
 import { validDashboardPage } from "./lib/ui-command.js";
 import {
   enrollWithHq,
@@ -56,7 +57,7 @@ Usage:
   sentryloom status [--json]
   sentryloom quarantine list|restore|delete
   sentryloom signatures status|trust|import
-  sentryloom update [all|clamav|malwarebazaar|urlhaus|feodotracker|threatfox] [--force]
+  sentryloom update [all|clamav|malwarebazaar|urlhaus|feodotracker|threatfox|spamhaus-drop|misp-circl|misp-botvrij|lmd] [--force]
   sentryloom ioc lookup <ip-domain-url>
   sentryloom credentials import-env
   sentryloom dns status|apply|restore
@@ -388,7 +389,7 @@ async function main() {
     case "update": {
       const source = args.shift() || "all";
       const sources = source === "all"
-        ? ["clamav", "malwarebazaar", "urlhaus", "feodotracker", "threatfox"]
+        ? Object.keys(FEED_SOURCES)
         : [source];
       const force = hasFlag("--force");
       const engine = await new AntivirusEngine().initialize();

@@ -22,7 +22,8 @@ const HQ_CAPABILITIES = Object.freeze([
   "hq-address-relocation-v1",
   "maintenance-authorization-v1",
   "maintenance-request-v1",
-  "threat-intelligence-gateway-v1"
+  "threat-intelligence-gateway-v1",
+  "endpoint-capability-negotiation-v1"
 ]);
 const SETTING_OPTIONS = Object.freeze({
   retentionDays: [30, 90, 365],
@@ -42,8 +43,33 @@ const COMMAND_TYPES = new Set([
   "update.databases",
   "client.update",
   "protection.fix-all",
-  "protection.restart"
+  "protection.restart",
+  "scan.apps",
+  "inventory.refresh",
+  "device.lock",
+  "device.reboot",
+  "policy.bluetooth-sharing.block",
+  "policy.bluetooth-sharing.allow",
+  "policy.camera.block",
+  "policy.camera.allow",
+  "policy.screen-capture.block",
+  "policy.screen-capture.allow",
+  "policy.unknown-sources.block",
+  "policy.unknown-sources.allow",
+  "policy.usb-data.block",
+  "policy.usb-data.allow",
+  "policy.safe-boot.block",
+  "policy.safe-boot.allow",
+  "policy.factory-reset.block",
+  "policy.factory-reset.allow"
 ]);
+
+export function deviceSupportsCommand(device, type) {
+  const advertised = device?.status?.capabilities?.commands;
+  // Clients predating capability negotiation are Windows-only and supported
+  // every command in the original allowlist.
+  return !Array.isArray(advertised) || advertised.includes(type);
+}
 const MIME = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -351,6 +377,7 @@ export async function createHqServer(config, options = {}) {
     const commands = store.listDevices()
       .filter((device) =>
         !device.revokedAt &&
+        deviceSupportsCommand(device, "client.update") &&
         compareVersions(
           update.version,
           device.status?.device?.appVersion || device.appVersion
@@ -889,6 +916,11 @@ export async function createHqServer(config, options = {}) {
           const body = await readJson(request);
           if (!COMMAND_TYPES.has(body.type)) {
             sendJson(response, 400, { error: "Command type is not allowed" });
+            return;
+          }
+          const device = store.getDevice(commandMatch[1]);
+          if (!device || !deviceSupportsCommand(device, body.type)) {
+            sendJson(response, 409, { error: "This action is not supported by the selected endpoint" });
             return;
           }
           sendJson(response, 201, store.createCommand(commandMatch[1], body.type, body.payload));

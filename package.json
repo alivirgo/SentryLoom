@@ -3,7 +3,7 @@
   "version": "0.16.11",
   "private": true,
   "type": "module",
-  "description": "Open-source, offline-first Windows endpoint security, antivirus, EDR monitoring, encrypted quarantine, and on-premises fleet management.",
+  "description": "Open-source, offline-first cross-platform endpoint security, antivirus, EDR monitoring, encrypted quarantine, and on-premises fleet management.",
   "author": "SentryLoom contributors",
   "bin": {
     "sentryloom": "./src/cli.js"
@@ -31,6 +31,9 @@
     "endpoint-security",
     "edr",
     "windows",
+    "linux",
+    "macos",
+    "android",
     "malware-detection",
     "ransomware-protection",
     "threat-intelligence",

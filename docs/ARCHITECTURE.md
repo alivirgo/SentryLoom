@@ -26,6 +26,10 @@ The scanner does not execute inspected content. The dashboard binds only to `127
 - `src/lib/threat-index.js`: disk-backed exact-hash and network-IOC lookup plus feed state.
 - `src/lib/threat-update-manager.js`: isolated worker orchestration for large updates.
 - `src/lib/windows-monitoring.js`: fixed-drive discovery, elevation status, and DNS cache collection.
+- `src/lib/platform-telemetry.js`: operating-system dispatch for Windows and Unix collectors.
+- `src/lib/unix-telemetry.js`: Linux/macOS process, persistence, security-log, removable-media, executable-trust, and firewall collectors.
+- `src/lib/system-information.js`: bounded OS, CPU, memory, storage, user, runtime, and network inventory.
+- `src/lib/platform-capabilities.js`: endpoint feature and remote-command negotiation.
 - `src/lib/network-monitor.js`: TCP endpoint polling and network-IOC correlation.
 - `src/lib/advanced-monitoring.js`: process, persistence, canary, security-event, removable-volume, and firewall collectors.
 - `src/lib/windows-telemetry.js`: bounded Windows CIM, event-log, Authenticode, volume, and firewall queries.
@@ -39,6 +43,9 @@ The scanner does not execute inspected content. The dashboard binds only to `127
 - `src/cli.js`: automation and service entry point.
 - `server/`: on-premises HTTPS fleet service, SQLite state, discovery responder,
   management dashboard, and rotating maintenance authorization service.
+- `clients/android/`: native Android endpoint using Android Keystore, certificate
+  pinning, foreground management, application inventory/hash scanning, and
+  DevicePolicyManager controls.
 
 Managed endpoints use HQ-issued maintenance passwords for critical local
 changes. Administrator-generated passwords are the primary path and are
@@ -70,7 +77,7 @@ The 256-bit master key is generated locally. Containers are verified during rest
 
 Signature databases are JSON payloads wrapped in an Ed25519-signed envelope. An endpoint imports a bundle only when its `keyId` is already in the local trust store and verification succeeds. The private key belongs on a separate secured signing workstation.
 
-Community updates are a separate, explicitly networked path. The updater accepts only HTTPS URLs on hard-coded provider hosts, applies response limits and timeouts, validates ClamAV CVD checksums, and performs transactional SQLite imports in a worker thread. Scanning queries this index locally and makes no provider requests.
+Community updates are a separate, explicitly networked path. The updater accepts only HTTPS URLs on hard-coded provider hosts, applies response limits and timeouts, validates ClamAV CVD and TAR checksums, and performs transactional SQLite imports in a worker thread. MISP imports accept only attributes explicitly marked for detection. Spamhaus netblocks remain compact CIDR records and are matched in memory without expanding address ranges. Scanning queries this index locally and makes no provider requests.
 
 HQ is a second, explicitly opt-in network boundary. Standalone mode creates no
 HQ connection. A prospective managed endpoint submits a rate-limited request
@@ -80,6 +87,11 @@ credential. Managed endpoints pin the server certificate SHA-256 fingerprint,
 push sanitized operational telemetry, and poll for predefined commands. The
 command protocol has no arbitrary executable, script, path, or shell-command
 field. Loss of HQ connectivity does not alter local protection state.
+
+Endpoints advertise their feature and command allowlists in telemetry. HQ
+disables incompatible actions and validates the selected command against the
+device advertisement before it enters the queue. The endpoint performs the
+same allowlist check again before execution.
 
 Hash indicators from ClamAV, MalwareBazaar, URLhaus, and ThreatFox join file scanning. Feodo Tracker and non-hash ThreatFox records are stored in `network_iocs`; they support local investigation without automatically mutating firewall or DNS policy.
 

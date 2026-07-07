@@ -281,12 +281,21 @@ const {
   malwareBazaarEntries,
   urlhausEntries,
   feodoTrackerEntries,
-  threatFoxEntries
+  threatFoxEntries,
+  spamhausDropEntries,
+  mispEntries,
+  linuxMalwareDetectEntries,
+  extractTarTextFiles
 } = await import("../src/lib/threat-feeds.js");
 const {
   scanWithClamAv
 } = await import("../src/lib/clamav-engine.js");
-const { withThreatDatabase } = await import("../src/lib/threat-index.js");
+const {
+  withThreatDatabase,
+  openThreatIndex,
+  parseCidr,
+  cidrContains
+} = await import("../src/lib/threat-index.js");
 const {
   saveThreatCredentials,
   loadThreatCredentials,
@@ -1333,6 +1342,99 @@ test("Feodo Tracker and ThreatFox split network IOCs from file hashes", () => {
   assert.equal(threatFox.iocs[0].value, "c2.example.test");
 });
 
+test("Spamhaus, MISP, and Linux Malware Detect parsers normalize safe IOC data", () => {
+  const spamhaus = spamhausDropEntries([
+    JSON.stringify({ cidr: "203.0.113.0/24", sblid: "SBL123", rir: "arin" }),
+    JSON.stringify({ cidr: "2001:db8:bad::/48", sblid: "SBL456", rir: "ripencc" }),
+    JSON.stringify({ type: "metadata", timestamp: 1780000000, records: 2 })
+  ].join("\n"));
+  assert.equal(spamhaus.iocs.length, 2);
+  assert.equal(spamhaus.iocs[0].type, "ipv4-cidr");
+  assert.equal(spamhaus.iocs[1].type, "ipv6-cidr");
+
+  const misp = mispEntries([{
+    Event: {
+      uuid: "11111111-1111-4111-8111-111111111111",
+      info: "Unit IOC event",
+      threat_level_id: "1",
+      Attribute: [
+        { type: "sha256", value: "a".repeat(64), to_ids: true },
+        { type: "domain", value: "evil.example", to_ids: true },
+        { type: "domain", value: "reference.example", to_ids: false }
+      ],
+      Object: [{
+        Attribute: [{ type: "ip-dst|port", value: "203.0.113.50|443", to_ids: true }]
+      }]
+    }
+  }], "misp-circl");
+  assert.equal(misp.hashes.length, 1);
+  assert.deepEqual(misp.iocs.map((entry) => entry.type), ["domain", "ip:port"]);
+  assert.equal(misp.iocs[0].confidence, 95);
+
+  const lmd = linuxMalwareDetectEntries(
+    `${"b".repeat(64)}:1234:{SHA256}bin.backdoor.unit.1\nmalformed`
+  );
+  assert.equal(lmd.length, 1);
+  assert.equal(lmd[0].algorithm, "sha256");
+  assert.equal(lmd[0].size, 1234);
+  assert.equal(lmd[0].confirmed, true);
+});
+
+test("CIDR IOC lookup matches IPv4 and IPv6 addresses without expanding ranges", async () => {
+  assert.equal(cidrContains(parseCidr("203.0.113.0/24"), "203.0.113.42"), true);
+  assert.equal(cidrContains("203.0.113.0/24", "203.0.114.1"), false);
+  assert.equal(cidrContains("2001:db8:bad::/48", "2001:db8:bad::99"), true);
+  const root = await sandbox("cidr-index");
+  const index = await openThreatIndex({ file: path.join(root, "threat-index.sqlite") });
+  try {
+    index.database.prepare(`
+      INSERT INTO network_iocs
+        (type, value, source, name, confidence, first_seen, last_seen, details, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      "ipv4-cidr", "203.0.113.0/24", "spamhaus-drop", "Spamhaus.DROP.Unit",
+      100, null, null, "{}", new Date().toISOString()
+    );
+    const matches = index.lookupIoc("203.0.113.42");
+    assert.equal(matches.length, 1);
+    assert.equal(matches[0].source, "spamhaus-drop");
+  } finally {
+    index.close();
+  }
+});
+
+test("Linux Malware Detect archive extraction validates TAR and returns only requested files", async () => {
+  const root = await sandbox("lmd-tar");
+  const tarEntry = (name, content) => {
+    const body = Buffer.from(content);
+    const header = Buffer.alloc(512);
+    header.write(name);
+    header.write("0000644\0", 100);
+    header.write("0000000\0", 108);
+    header.write("0000000\0", 116);
+    header.write(`${body.length.toString(8).padStart(11, "0")}\0`, 124);
+    header.write("00000000000\0", 136);
+    header.fill(0x20, 148, 156);
+    header.write("0", 156);
+    header.write("ustar\0", 257);
+    header.write("00", 263);
+    const checksum = [...header].reduce((sum, byte) => sum + byte, 0);
+    header.write(`${checksum.toString(8).padStart(6, "0")}\0 `, 148);
+    return Buffer.concat([header, body, Buffer.alloc((512 - body.length % 512) % 512)]);
+  };
+  const signature = `${"c".repeat(64)}:99:{SHA256}bin.malware.unit.1\n`;
+  const archive = gzipSync(Buffer.concat([
+    tarEntry("sigs/sha256v2.dat", signature),
+    tarEntry("sigs/maldet.sigs.ver", "20260706001\n"),
+    Buffer.alloc(1024)
+  ]));
+  const file = path.join(root, "lmd.tgz");
+  await fs.writeFile(file, archive);
+  const files = await extractTarTextFiles(file, ["sigs/sha256v2.dat", "sigs/maldet.sigs.ver"]);
+  assert.equal(files.get("sigs/sha256v2.dat"), signature);
+  assert.equal(files.get("sigs/maldet.sigs.ver").trim(), "20260706001");
+});
+
 test("ClamAV CVD parser verifies integrity and extracts file hashes", async () => {
   const root = await sandbox("cvd");
   const signature = `${"1".repeat(32)}:68:Win.Test.Cvd\n`;
@@ -1436,6 +1538,11 @@ test("managed client UI identifies server-maintained abuse.ch access", async () 
     fs.readFile(path.join("src", "ui", "app.js"), "utf8")
   ]);
   assert.match(html, /id="abuse-auth-key-state"/);
+  assert.match(html, /data-feed="spamhaus-drop"/);
+  assert.match(html, /data-feed="misp-circl"/);
+  assert.match(html, /data-feed="misp-botvrij"/);
+  assert.match(html, /data-feed="lmd"/);
+  assert.match(html, /VirusTotal has API quotas/);
   assert.match(app, /Auth-Key is added and maintained by SentryLoom HQ/);
   assert.match(app, /key is never sent to or stored on this client/);
 });
