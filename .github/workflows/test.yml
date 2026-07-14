@@ -42,7 +42,7 @@ jobs:
       - name: Build and lint Android client
         working-directory: clients/android
         run: ./gradlew lintDebug testDebugUnitTest assembleDebug
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: SentryLoom-Android-debug
           path: clients/android/app/build/outputs/apk/debug/app-debug.apk
