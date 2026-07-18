@@ -12,7 +12,7 @@
   </style>
   <rect width="100%" height="100%" rx="12" class="background"/>
   <text x="72" y="30" class="title">SentryLoom community growth</text>
-  <text x="932" y="30" text-anchor="end" class="subtitle">Updated 2026-07-17</text>
+  <text x="932" y="30" text-anchor="end" class="subtitle">Updated 2026-07-18</text>
   <rect x="72" y="54" width="860" height="314" rx="6" class="plot"/>
   <line x1="72" y1="368" x2="932" y2="368" class="grid"/>
       <text x="60" y="372" text-anchor="end" class="tick">0</text>
@@ -27,39 +27,41 @@
 <line x1="72" y1="54" x2="932" y2="54" class="grid"/>
       <text x="60" y="58" text-anchor="end" class="tick">5</text>
   <line x1="72" y1="368" x2="932" y2="368" class="axis"/>
-  <polyline points="72.0,368.0 138.2,305.2 204.3,305.2 270.5,305.2 336.6,305.2 402.8,305.2 468.9,305.2 535.1,305.2 601.2,305.2 667.4,305.2 733.5,305.2 799.7,305.2 865.8,305.2 932.0,305.2" class="stars"/>
-  <polyline points="72.0,305.2 138.2,305.2 204.3,242.4 270.5,242.4 336.6,242.4 402.8,179.6 468.9,179.6 535.1,179.6 601.2,179.6 667.4,179.6 733.5,179.6 799.7,179.6 865.8,179.6 932.0,179.6" class="contributors"/>
+  <polyline points="72.0,368.0 133.4,305.2 194.9,305.2 256.3,305.2 317.7,305.2 379.1,305.2 440.6,305.2 502.0,305.2 563.4,305.2 624.9,305.2 686.3,305.2 747.7,305.2 809.1,305.2 870.6,305.2 932.0,305.2" class="stars"/>
+  <polyline points="72.0,305.2 133.4,305.2 194.9,242.4 256.3,242.4 317.7,242.4 379.1,179.6 440.6,179.6 502.0,179.6 563.4,179.6 624.9,179.6 686.3,179.6 747.7,179.6 809.1,179.6 870.6,179.6 932.0,179.6" class="contributors"/>
   <circle cx="72" cy="368" r="3.5" class="star-dot"/>
-  <circle cx="138.15384615384616" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="204.30769230769232" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="270.46153846153845" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="336.61538461538464" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="402.7692307692308" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="468.92307692307696" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="535.0769230769231" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="601.2307692307693" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="667.3846153846154" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="733.5384615384615" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="799.6923076923077" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="865.8461538461539" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="133.42857142857142" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="194.85714285714283" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="256.2857142857143" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="317.71428571428567" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="379.14285714285717" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="440.57142857142856" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="502" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="563.4285714285713" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="624.8571428571429" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="686.2857142857143" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="747.7142857142857" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="809.1428571428571" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="870.5714285714286" cy="305.2" r="3.5" class="star-dot"/>
   <circle cx="932" cy="305.2" r="3.5" class="star-dot"/>
   <circle cx="72" cy="305.2" r="3.5" class="contributor-dot"/>
-  <circle cx="138.15384615384616" cy="305.2" r="3.5" class="contributor-dot"/>
-  <circle cx="204.30769230769232" cy="242.39999999999998" r="3.5" class="contributor-dot"/>
-  <circle cx="270.46153846153845" cy="242.39999999999998" r="3.5" class="contributor-dot"/>
-  <circle cx="336.61538461538464" cy="242.39999999999998" r="3.5" class="contributor-dot"/>
-  <circle cx="402.7692307692308" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="468.92307692307696" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="535.0769230769231" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="601.2307692307693" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="667.3846153846154" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="733.5384615384615" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="799.6923076923077" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="865.8461538461539" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="133.42857142857142" cy="305.2" r="3.5" class="contributor-dot"/>
+  <circle cx="194.85714285714283" cy="242.39999999999998" r="3.5" class="contributor-dot"/>
+  <circle cx="256.2857142857143" cy="242.39999999999998" r="3.5" class="contributor-dot"/>
+  <circle cx="317.71428571428567" cy="242.39999999999998" r="3.5" class="contributor-dot"/>
+  <circle cx="379.14285714285717" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="440.57142857142856" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="502" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="563.4285714285713" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="624.8571428571429" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="686.2857142857143" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="747.7142857142857" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="809.1428571428571" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="870.5714285714286" cy="179.6" r="3.5" class="contributor-dot"/>
   <circle cx="932" cy="179.6" r="3.5" class="contributor-dot"/>
   <text x="72" y="408" text-anchor="middle" class="tick">2026-07-04</text>
-<text x="468.92307692307696" y="408" text-anchor="middle" class="tick">2026-07-10</text>
-<text x="932" y="408" text-anchor="middle" class="tick">2026-07-17</text>
+<text x="502" y="408" text-anchor="middle" class="tick">2026-07-11</text>
+<text x="932" y="408" text-anchor="middle" class="tick">2026-07-18</text>
   <circle cx="72" cy="430" r="5" class="star-dot"/>
   <text x="84" y="434" class="legend">GitHub stars (1)</text>
   <circle cx="247" cy="430" r="5" class="contributor-dot"/>
