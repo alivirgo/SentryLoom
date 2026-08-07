@@ -12,7 +12,7 @@
   </style>
   <rect width="100%" height="100%" rx="12" class="background"/>
   <text x="72" y="30" class="title">SentryLoom community growth</text>
-  <text x="932" y="30" text-anchor="end" class="subtitle">Updated 2026-08-06</text>
+  <text x="932" y="30" text-anchor="end" class="subtitle">Updated 2026-08-07</text>
   <rect x="72" y="54" width="860" height="314" rx="6" class="plot"/>
   <line x1="72" y1="368" x2="932" y2="368" class="grid"/>
       <text x="60" y="372" text-anchor="end" class="tick">0</text>
@@ -27,79 +27,81 @@
 <line x1="72" y1="54" x2="932" y2="54" class="grid"/>
       <text x="60" y="58" text-anchor="end" class="tick">5</text>
   <line x1="72" y1="368" x2="932" y2="368" class="axis"/>
-  <polyline points="72.0,368.0 98.1,305.2 124.1,305.2 150.2,305.2 176.2,305.2 202.3,305.2 228.4,305.2 254.4,305.2 280.5,305.2 306.5,305.2 332.6,305.2 358.7,305.2 384.7,305.2 410.8,305.2 436.8,305.2 462.9,305.2 489.0,305.2 515.0,305.2 541.1,305.2 567.2,305.2 593.2,305.2 619.3,305.2 645.3,305.2 671.4,305.2 697.5,242.4 723.5,242.4 749.6,242.4 775.6,242.4 801.7,242.4 827.8,242.4 853.8,242.4 879.9,242.4 905.9,242.4 932.0,242.4" class="stars"/>
-  <polyline points="72.0,305.2 98.1,305.2 124.1,242.4 150.2,242.4 176.2,242.4 202.3,179.6 228.4,179.6 254.4,179.6 280.5,179.6 306.5,179.6 332.6,179.6 358.7,179.6 384.7,179.6 410.8,179.6 436.8,179.6 462.9,179.6 489.0,179.6 515.0,179.6 541.1,179.6 567.2,179.6 593.2,179.6 619.3,179.6 645.3,179.6 671.4,179.6 697.5,179.6 723.5,179.6 749.6,179.6 775.6,179.6 801.7,179.6 827.8,179.6 853.8,179.6 879.9,179.6 905.9,179.6 932.0,179.6" class="contributors"/>
+  <polyline points="72.0,368.0 97.3,305.2 122.6,305.2 147.9,305.2 173.2,305.2 198.5,305.2 223.8,305.2 249.1,305.2 274.4,305.2 299.6,305.2 324.9,305.2 350.2,305.2 375.5,305.2 400.8,305.2 426.1,305.2 451.4,305.2 476.7,305.2 502.0,305.2 527.3,305.2 552.6,305.2 577.9,305.2 603.2,305.2 628.5,305.2 653.8,305.2 679.1,242.4 704.4,242.4 729.6,242.4 754.9,242.4 780.2,242.4 805.5,242.4 830.8,242.4 856.1,242.4 881.4,242.4 906.7,242.4 932.0,242.4" class="stars"/>
+  <polyline points="72.0,305.2 97.3,305.2 122.6,242.4 147.9,242.4 173.2,242.4 198.5,179.6 223.8,179.6 249.1,179.6 274.4,179.6 299.6,179.6 324.9,179.6 350.2,179.6 375.5,179.6 400.8,179.6 426.1,179.6 451.4,179.6 476.7,179.6 502.0,179.6 527.3,179.6 552.6,179.6 577.9,179.6 603.2,179.6 628.5,179.6 653.8,179.6 679.1,179.6 704.4,179.6 729.6,179.6 754.9,179.6 780.2,179.6 805.5,179.6 830.8,179.6 856.1,179.6 881.4,179.6 906.7,179.6 932.0,179.6" class="contributors"/>
   <circle cx="72" cy="368" r="3.5" class="star-dot"/>
-  <circle cx="98.06060606060606" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="124.12121212121212" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="150.1818181818182" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="176.24242424242425" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="202.3030303030303" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="228.36363636363637" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="254.42424242424244" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="280.4848484848485" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="306.5454545454545" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="332.6060606060606" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="358.66666666666663" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="384.72727272727275" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="410.78787878787875" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="436.8484848484849" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="462.9090909090909" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="488.969696969697" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="515.030303030303" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="541.090909090909" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="567.1515151515152" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="593.2121212121212" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="619.2727272727273" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="645.3333333333333" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="671.3939393939395" cy="305.2" r="3.5" class="star-dot"/>
-  <circle cx="697.4545454545455" cy="242.39999999999998" r="3.5" class="star-dot"/>
-  <circle cx="723.5151515151515" cy="242.39999999999998" r="3.5" class="star-dot"/>
-  <circle cx="749.5757575757575" cy="242.39999999999998" r="3.5" class="star-dot"/>
-  <circle cx="775.6363636363636" cy="242.39999999999998" r="3.5" class="star-dot"/>
-  <circle cx="801.6969696969697" cy="242.39999999999998" r="3.5" class="star-dot"/>
-  <circle cx="827.7575757575758" cy="242.39999999999998" r="3.5" class="star-dot"/>
-  <circle cx="853.8181818181818" cy="242.39999999999998" r="3.5" class="star-dot"/>
-  <circle cx="879.8787878787879" cy="242.39999999999998" r="3.5" class="star-dot"/>
-  <circle cx="905.939393939394" cy="242.39999999999998" r="3.5" class="star-dot"/>
+  <circle cx="97.29411764705883" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="122.58823529411765" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="147.88235294117646" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="173.1764705882353" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="198.47058823529412" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="223.76470588235296" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="249.05882352941177" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="274.3529411764706" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="299.6470588235294" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="324.94117647058823" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="350.2352941176471" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="375.5294117647059" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="400.8235294117647" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="426.11764705882354" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="451.4117647058823" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="476.70588235294116" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="502" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="527.2941176470588" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="552.5882352941177" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="577.8823529411765" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="603.1764705882354" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="628.4705882352941" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="653.7647058823529" cy="305.2" r="3.5" class="star-dot"/>
+  <circle cx="679.0588235294118" cy="242.39999999999998" r="3.5" class="star-dot"/>
+  <circle cx="704.3529411764706" cy="242.39999999999998" r="3.5" class="star-dot"/>
+  <circle cx="729.6470588235294" cy="242.39999999999998" r="3.5" class="star-dot"/>
+  <circle cx="754.9411764705882" cy="242.39999999999998" r="3.5" class="star-dot"/>
+  <circle cx="780.2352941176471" cy="242.39999999999998" r="3.5" class="star-dot"/>
+  <circle cx="805.5294117647059" cy="242.39999999999998" r="3.5" class="star-dot"/>
+  <circle cx="830.8235294117646" cy="242.39999999999998" r="3.5" class="star-dot"/>
+  <circle cx="856.1176470588235" cy="242.39999999999998" r="3.5" class="star-dot"/>
+  <circle cx="881.4117647058823" cy="242.39999999999998" r="3.5" class="star-dot"/>
+  <circle cx="906.7058823529412" cy="242.39999999999998" r="3.5" class="star-dot"/>
   <circle cx="932" cy="242.39999999999998" r="3.5" class="star-dot"/>
   <circle cx="72" cy="305.2" r="3.5" class="contributor-dot"/>
-  <circle cx="98.06060606060606" cy="305.2" r="3.5" class="contributor-dot"/>
-  <circle cx="124.12121212121212" cy="242.39999999999998" r="3.5" class="contributor-dot"/>
-  <circle cx="150.1818181818182" cy="242.39999999999998" r="3.5" class="contributor-dot"/>
-  <circle cx="176.24242424242425" cy="242.39999999999998" r="3.5" class="contributor-dot"/>
-  <circle cx="202.3030303030303" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="228.36363636363637" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="254.42424242424244" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="280.4848484848485" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="306.5454545454545" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="332.6060606060606" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="358.66666666666663" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="384.72727272727275" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="410.78787878787875" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="436.8484848484849" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="462.9090909090909" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="488.969696969697" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="515.030303030303" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="541.090909090909" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="567.1515151515152" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="593.2121212121212" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="619.2727272727273" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="645.3333333333333" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="671.3939393939395" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="697.4545454545455" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="723.5151515151515" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="749.5757575757575" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="775.6363636363636" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="801.6969696969697" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="827.7575757575758" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="853.8181818181818" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="879.8787878787879" cy="179.6" r="3.5" class="contributor-dot"/>
-  <circle cx="905.939393939394" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="97.29411764705883" cy="305.2" r="3.5" class="contributor-dot"/>
+  <circle cx="122.58823529411765" cy="242.39999999999998" r="3.5" class="contributor-dot"/>
+  <circle cx="147.88235294117646" cy="242.39999999999998" r="3.5" class="contributor-dot"/>
+  <circle cx="173.1764705882353" cy="242.39999999999998" r="3.5" class="contributor-dot"/>
+  <circle cx="198.47058823529412" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="223.76470588235296" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="249.05882352941177" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="274.3529411764706" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="299.6470588235294" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="324.94117647058823" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="350.2352941176471" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="375.5294117647059" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="400.8235294117647" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="426.11764705882354" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="451.4117647058823" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="476.70588235294116" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="502" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="527.2941176470588" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="552.5882352941177" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="577.8823529411765" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="603.1764705882354" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="628.4705882352941" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="653.7647058823529" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="679.0588235294118" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="704.3529411764706" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="729.6470588235294" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="754.9411764705882" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="780.2352941176471" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="805.5294117647059" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="830.8235294117646" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="856.1176470588235" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="881.4117647058823" cy="179.6" r="3.5" class="contributor-dot"/>
+  <circle cx="906.7058823529412" cy="179.6" r="3.5" class="contributor-dot"/>
   <circle cx="932" cy="179.6" r="3.5" class="contributor-dot"/>
   <text x="72" y="408" text-anchor="middle" class="tick">2026-07-04</text>
-<text x="488.969696969697" y="408" text-anchor="middle" class="tick">2026-07-20</text>
-<text x="932" y="408" text-anchor="middle" class="tick">2026-08-06</text>
+<text x="502" y="408" text-anchor="middle" class="tick">2026-07-21</text>
+<text x="932" y="408" text-anchor="middle" class="tick">2026-08-07</text>
   <circle cx="72" cy="430" r="5" class="star-dot"/>
   <text x="84" y="434" class="legend">GitHub stars (2)</text>
   <circle cx="247" cy="430" r="5" class="contributor-dot"/>
