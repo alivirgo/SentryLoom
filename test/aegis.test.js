@@ -370,7 +370,7 @@ test("client upgrades preserve stored settings and record a versioned migration"
   assert.deepEqual(config.scanner.exclusions, ["C:\\Preserve-Me"]);
   const migration = JSON.parse(await fs.readFile(path.join(data, "upgrade-state.json"), "utf8"));
   assert.equal(migration.previousVersion, "0.16.1");
-  assert.equal(migration.currentVersion, "0.16.11");
+  assert.equal(migration.currentVersion, "0.16.12");
   const backups = await fs.readdir(path.join(data, "upgrade-backups"));
   assert.equal(backups.some((name) => name.startsWith("config-0.16.1-")), true);
 });
@@ -834,7 +834,7 @@ test("managed client replaces a preserved HQ target, encrypts enrollment, and ex
     connector.running = true;
     await connector.pulse();
     assert.equal(connector.status().enrolled, true);
-    assert.equal(connector.status().hqVersion, "0.4.5");
+    assert.equal(connector.status().hqVersion, "0.4.6");
     assert.equal(connector.status().maintenanceAuthorizationSupported, true);
     assert.equal(connector.status().abuseChGatewayConfigured, false);
     for (let attempt = 0; attempt < 20 &&

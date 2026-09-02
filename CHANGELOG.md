@@ -4,6 +4,22 @@ All notable changes to SentryLoom will be documented here.
 
 The project uses semantic versioning where practical.
 
+## [0.16.12] - 2026-09-02
+
+SentryLoom Endpoint Security v0.16.12 ships with SentryLoom HQ v0.4.6 and
+SentryLoom Android v0.2.1.
+
+### Reliable lifecycle management
+
+- Added acknowledged remote endpoint offboarding for desktop and Android.
+- HQ revokes the device credential only after the endpoint confirms that it
+  accepted the command; offline endpoints process the queued action on return.
+- Credential rotation and re-enrollment remain separate from offboarding.
+- Local dashboards remain available when optional Windows telemetry probes are
+  denied, with explicit unavailable states instead of an HTTP 500 response.
+- Expanded regression coverage for telemetry degradation and offboarding order.
+- Hardened cross-platform CI and Android packaging validation.
+
 ## [0.16.11] - 2026-07-05
 
 SentryLoom Endpoint Security v0.16.11 ships with SentryLoom HQ v0.4.5.

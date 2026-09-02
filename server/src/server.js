@@ -15,7 +15,7 @@ import { ThreatGateway } from "./threat-gateway.js";
 const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 const publicDirectory = path.resolve(moduleDirectory, "..", "public");
 const DISCOVERY_REQUEST = "SENTRYLOOM_HQ_DISCOVER_V1";
-const HQ_VERSION = "0.4.5";
+const HQ_VERSION = "0.4.6";
 const DEFAULT_UPDATE_STAGING = "Z:\\Extreme Control\\SentryLoom Updates";
 const HQ_CAPABILITIES = Object.freeze([
   "verified-enrollment-v1",
