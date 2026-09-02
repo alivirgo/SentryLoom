@@ -10,7 +10,7 @@ import java.util.Locale;
 import java.util.UUID;
 
 final class EndpointState {
-    static final String VERSION = "0.2.1";
+    static final String VERSION = "0.3.0";
     private static final String CREDENTIALS = "credentials";
     private static final String PENDING = "pending";
     private final SharedPreferences preferences;

@@ -1,5 +1,5 @@
 #define MyAppName "SentryLoom Endpoint Security"
-#define MyAppVersion "0.16.12"
+#define MyAppVersion "0.17.0"
 #define MyAppPublisher "NUC7 Studios"
 #define MyAppExeName "SentryLoom.exe"
 

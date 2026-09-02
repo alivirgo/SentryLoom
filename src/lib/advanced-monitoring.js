@@ -9,7 +9,7 @@ import { appendAudit } from "./audit-log.js";
 import { compileSignatures, loadSignatures } from "./signature-store.js";
 import { scanFile } from "./scanner.js";
 import { openThreatIndex } from "./threat-index.js";
-import { runPowerShell } from "./windows-monitoring.js";
+import { runPowerShell, discoverUsbStorageDevices } from "./windows-monitoring.js";
 import {
   discoverRemovableDrives,
   readExecutableTrustStatus,
@@ -55,6 +55,7 @@ export class AdvancedMonitoring {
     this.config = config;
     this.onEvent = onEvent;
     this.onRemovableDrive = options.onRemovableDrive || (() => {});
+    this.onExternalStorage = options.onExternalStorage || (() => {});
     this.running = false;
     this.timers = new Set();
     this.errors = 0;
@@ -114,6 +115,7 @@ export class AdvancedMonitoring {
     if (this.config.monitoring.ransomwareEnabled) await this.initializeCanaries();
     if (this.config.monitoring.removableMediaEnabled) {
       this.removableBaseline = new Set((await discoverRemovableDrives()).map((drive) => drive.root.toLowerCase()));
+      this.usbStorageBaseline = new Set((await discoverUsbStorageDevices()).map((device) => device.id.toLowerCase()));
       this.schedule("removable", 1000, this.config.monitoring.removablePollIntervalMs, () => this.pollRemovable());
     }
     if (this.config.monitoring.firewallIntegrityEnabled) {
@@ -319,6 +321,20 @@ export class AdvancedMonitoring {
   }
 
   async pollRemovable() {
+    const storageDevices = await discoverUsbStorageDevices();
+    const nextStorage = new Set(storageDevices.map((device) => device.id.toLowerCase()));
+    for (const device of storageDevices) {
+      if (this.usbStorageBaseline.has(device.id.toLowerCase())) continue;
+      this.onEvent({
+        type: "device-control.external-storage-detected",
+        severity: "high",
+        device,
+        message: "USB storage connected; access is governed by company policy"
+      });
+      await appendAudit("device-control.external-storage-detected", device);
+      this.onExternalStorage(device);
+    }
+    this.usbStorageBaseline = nextStorage;
     const drives = await discoverRemovableDrives();
     const next = new Set(drives.map((drive) => drive.root.toLowerCase()));
     for (const drive of drives) {

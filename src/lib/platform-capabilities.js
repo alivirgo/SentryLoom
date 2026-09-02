@@ -10,7 +10,11 @@ const COMMON_COMMANDS = Object.freeze([
   "update.databases",
   "protection.fix-all",
   "protection.restart",
-  "management.disconnect"
+  "management.disconnect",
+  "device.lock",
+  "dlp.labeling.enable",
+  "dlp.labeling.disable",
+  "dlp.policy.set"
 ]);
 
 export function platformFamily(platform = process.platform) {
@@ -47,6 +51,9 @@ export function endpointCapabilities(platform = process.platform) {
       "control.firewall-ioc",
       "control.dns-filtering",
       "control.usb-storage",
+      "control.usb-storage-exceptions",
+      "control.remote-company-data-wipe",
+      "dlp.document-labeling",
       "client.self-update",
       "ui.native-path-picker",
       "notification.desktop"
@@ -72,7 +79,10 @@ export function endpointCapabilities(platform = process.platform) {
 
 export function supportedCommands(platform = process.platform) {
   const commands = [...COMMON_COMMANDS];
-  if (platform === "win32") commands.push("client.update");
+  if (platform === "win32") commands.push(
+    "client.update", "device.wipe-company-data",
+    "policy.external-storage.block", "policy.external-storage.allow"
+  );
   return commands;
 }
 

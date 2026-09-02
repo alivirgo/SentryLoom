@@ -5,8 +5,8 @@ type: software
 authors:
   - family-names: "Contributors"
     given-names: "SentryLoom"
-version: 0.16.12
-date-released: 2026-09-02
+version: 0.17.0
+date-released: 2026-09-03
 license: Apache-2.0
 repository-code: "https://github.com/alivirgo/SentryLoom"
 url: "https://github.com/alivirgo/SentryLoom"

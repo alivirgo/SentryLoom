@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>SentryLoom HQ</title>
-  <link rel="stylesheet" href="/styles.css?v=0.4.6">
-  <link rel="stylesheet" href="/approvals.css?v=0.4.6">
-  <link rel="stylesheet" href="/device-details.css?v=0.4.6">
-  <link rel="stylesheet" href="/alerts.css?v=0.4.6">
+  <link rel="stylesheet" href="/styles.css?v=0.5.0">
+  <link rel="stylesheet" href="/approvals.css?v=0.5.0">
+  <link rel="stylesheet" href="/device-details.css?v=0.5.0">
+  <link rel="stylesheet" href="/alerts.css?v=0.5.0">
 </head>
 <body>
   <section class="login" id="login">
@@ -227,8 +227,15 @@
         <button data-command="protection.restart">Restart protection</button>
         <button data-command="scan.apps">Scan Android apps</button>
         <button data-command="inventory.refresh">Refresh inventory</button>
-        <button data-command="device.lock">Lock Android device</button>
-        <button data-command="device.reboot">Reboot Android device</button>
+          <button data-command="device.lock">Lock device</button>
+          <button data-command="device.wipe" class="danger">Factory wipe mobile</button>
+          <button data-command="device.wipe-company-data" class="danger">Wipe company data</button>
+          <button data-command="device.reboot">Reboot Android device</button>
+          <button data-command="dlp.labeling.enable">Require document labels</button>
+          <button data-command="dlp.labeling.disable">Stop requiring labels</button>
+          <button data-command="dlp.policy.set">Configure DLP policy</button>
+          <button data-command="policy.external-storage.block">Block external storage</button>
+          <button data-command="policy.external-storage.allow">Allow external storage</button>
         <button data-command="policy.bluetooth-sharing.block">Block Bluetooth sharing</button>
         <button data-command="policy.bluetooth-sharing.allow">Allow Bluetooth sharing</button>
         <button data-command="policy.camera.block">Disable Android camera</button>
@@ -248,6 +255,6 @@
     </section>
   </dialog>
   <div class="toast" id="toast"></div>
-  <script type="module" src="/app.js?v=0.4.6"></script>
+  <script type="module" src="/app.js?v=0.5.0"></script>
 </body>
 </html>

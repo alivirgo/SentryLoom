@@ -4,6 +4,25 @@ All notable changes to SentryLoom will be documented here.
 
 The project uses semantic versioning where practical.
 
+## [0.17.0] - 2026-09-03
+
+SentryLoom Endpoint Security v0.17.0 ships with SentryLoom HQ v0.5.0 and
+SentryLoom Android v0.3.0.
+
+- Added acknowledged remote lock across desktop platforms and Android.
+- Added Android Enterprise Device Owner factory wipe and guarded desktop
+  company-data wipe restricted to explicitly configured folders.
+- Added per-endpoint external-storage block/allow actions while preserving USB
+  keyboards, mice, audio devices, printers, and other non-storage peripherals.
+- Added USB-storage arrival alerts even when Windows does not mount a volume.
+- Added document classification using Public, Internal, Confidential, and
+  Super Confidential labels.
+- Added deny-by-default transfer authorization for Super Confidential files at
+  monitored email, internet, and external-storage integration boundaries, with
+  explicit administrator destination exceptions.
+- Added local and HQ notifications, immutable audit records, destructive-action
+  confirmation, capability negotiation, and regression coverage.
+
 ## [0.16.12] - 2026-09-02
 
 SentryLoom Endpoint Security v0.16.12 ships with SentryLoom HQ v0.4.6 and

@@ -64,6 +64,8 @@ import { readJson, writeJsonAtomic } from "./fs-safe.js";
 import { collectWakeNetworkInterfaces } from "./network-identity.js";
 import { platformDescriptor, supportedCommands } from "./platform-capabilities.js";
 import { collectSystemInformation } from "./system-information.js";
+import { lockDevice, wipeCompanyData } from "./device-actions.js";
+import { observeDocument, listDocumentLabels, labelDocument, authorizeTransfer } from "./dlp-labels.js";
 
 const HQ_SENSITIVE_FIELD = /(?:password|secret|token|authkey|credential|masterkey|privatekey|controller)/i;
 
@@ -165,13 +167,17 @@ export class AntivirusEngine {
         : [os.homedir()];
     if (!this.advancedMonitoring?.running) {
       this.advancedMonitoring = new AdvancedMonitoring(this.config, (event) => this.emit(event), {
-        onRemovableDrive: (drive) => this.handleRemovableDrive(drive)
+        onRemovableDrive: (drive) => this.handleRemovableDrive(drive),
+        onExternalStorage: () => {}
       });
       await this.advancedMonitoring.start();
     }
     if (!this.protection?.running) {
       this.protection = new RealtimeProtection(this.config, (event) => this.emit(event), {
-        onFileChange: (file) => this.advancedMonitoring?.observeFileEvent(file)
+        onFileChange: (file) => {
+          this.advancedMonitoring?.observeFileEvent(file);
+          this.handleDlpDocument(file);
+        }
       });
       await this.protection.start(resolvedTargets);
     }
@@ -335,6 +341,19 @@ export class AntivirusEngine {
     this.runScan("path", drive.root).catch((error) => {
       this.emit({ type: "removable.scan-error", drive, error: error.message });
     });
+  }
+
+  handleDlpDocument(file) {
+    if (!this.config.dataLossPrevention?.labelingEnabled) return;
+    void observeDocument(file).then((document) => {
+      if (!document || document.label) return;
+      this.emit({
+        type: "dlp.document-label-required",
+        severity: "medium",
+        document: { id: document.id, name: path.basename(document.path) },
+        message: `Choose a data label for ${path.basename(document.path)}`
+      });
+    }).catch((error) => this.emit({ type: "dlp.labeling-error", error: error.message }));
   }
 
   async handleNetworkDetection({ observation, matches }) {
@@ -867,6 +886,11 @@ export class AntivirusEngine {
           exclusionsCount: this.config.scanner.exclusions.length
         }
       },
+      dataLossPrevention: {
+        labelingEnabled: this.config.dataLossPrevention.labelingEnabled,
+        requireLabelBeforeExternalTransfer: this.config.dataLossPrevention.requireLabelBeforeExternalTransfer,
+        documents: await listDocumentLabels()
+      },
       protection: sanitizeHqValue(status.protection),
       signatures: {
         version: status.signatures.version,
@@ -958,6 +982,46 @@ export class AntivirusEngine {
       timer.unref?.();
       return { accepted: true, disconnectedAt };
     }
+    if (type === "device.lock") {
+      const result = await lockDevice();
+      await appendAudit("device.remote-lock", result);
+      return result;
+    }
+    if (type === "device.wipe-company-data") {
+      const allowedRoots = this.config.dataLossPrevention.protectedRoots;
+      const roots = command.payload?.roots?.length ? command.payload.roots : allowedRoots;
+      const result = await wipeCompanyData(roots, allowedRoots);
+      await appendAudit("device.remote-company-data-wipe", result);
+      const timer = setTimeout(() => void lockDevice().catch(() => {}), 250);
+      timer.unref?.();
+      return result;
+    }
+    if (type === "policy.external-storage.block" || type === "policy.external-storage.allow") {
+      return this.setUsbStorageBlocked(type.endsWith(".block"));
+    }
+    if (type === "dlp.labeling.enable" || type === "dlp.labeling.disable") {
+      const enabled = type.endsWith(".enable");
+      this.config = await saveConfig({ dataLossPrevention: { labelingEnabled: enabled } });
+      await appendAudit("dlp.labeling-policy", { enabled });
+      return { labelingEnabled: enabled, changedAt: new Date().toISOString() };
+    }
+    if (type === "dlp.policy.set") {
+      const protectedRoots = Array.isArray(command.payload?.protectedRoots)
+        ? command.payload.protectedRoots.map((root) => path.resolve(root)) : [];
+      const superConfidentialAllowedDestinations = Array.isArray(command.payload?.allowedDestinations)
+        ? command.payload.allowedDestinations : [];
+      this.config = await saveConfig({
+        dataLossPrevention: { protectedRoots, superConfidentialAllowedDestinations }
+      });
+      await appendAudit("dlp.policy-updated", {
+        protectedRootCount: protectedRoots.length,
+        allowedDestinationCount: superConfidentialAllowedDestinations.length
+      });
+      return {
+        protectedRootCount: protectedRoots.length,
+        allowedDestinations: superConfidentialAllowedDestinations
+      };
+    }
     throw new Error(`HQ command is not allowed: ${type}`);
   }
 
@@ -1041,6 +1105,40 @@ export class AntivirusEngine {
     });
     this.emit({ type: blocked ? "device-control.usb-storage-blocked" : "device-control.usb-storage-restored" });
     return { usbStorage: status };
+  }
+
+  async listDlpDocuments() {
+    return listDocumentLabels();
+  }
+
+  async setDocumentLabel(id, label) {
+    const record = await labelDocument(id, label);
+    await appendAudit("dlp.document-labeled", { id: record.id, label: record.label });
+    this.emit({ type: "dlp.document-labeled", documentId: record.id, label: record.label });
+    return record;
+  }
+
+  async authorizeDlpTransfer({ documentId, channel, destination }) {
+    const document = (await listDocumentLabels()).find((item) => item.id === documentId);
+    if (!document) throw new Error("The document is not registered with DLP");
+    const decision = authorizeTransfer(
+      document,
+      channel,
+      destination,
+      this.config.dataLossPrevention.superConfidentialAllowedDestinations
+    );
+    await appendAudit(`dlp.transfer-${decision.allowed ? "allowed" : "blocked"}`, {
+      documentId, label: document.label, channel, destination, reason: decision.reason
+    });
+    if (!decision.allowed) this.emit({
+      type: "dlp.transfer-blocked",
+      severity: "high",
+      documentId,
+      channel,
+      destination,
+      message: `Super Confidential ${channel} transfer to ${destination || "an unapproved destination"} was blocked`
+    });
+    return decision;
   }
 
   async chooseScanTarget(kind) {

@@ -103,6 +103,36 @@ export function notificationForEvent(event) {
     };
   }
 
+  if (event.type === "dlp.document-label-required") {
+    return {
+      key: `dlp-label:${event.document?.id || event.id}`,
+      title: "Company document needs a label",
+      message: `${event.document?.name || "A new document"} must be labeled Public, Internal, Confidential, or Super Confidential.`,
+      page: "activity",
+      severity: "Warning"
+    };
+  }
+
+  if (event.type === "dlp.transfer-blocked") {
+    return {
+      key: `dlp-block:${event.documentId || event.id}:${event.channel || "transfer"}`,
+      title: "Super Confidential transfer blocked",
+      message: `SentryLoom blocked a ${event.channel || "data"} transfer. Contact your administrator to allow the destination.`,
+      page: "activity",
+      severity: "Error"
+    };
+  }
+
+  if (event.type === "device-control.external-storage-detected") {
+    return {
+      key: `external-storage:${event.drive?.root || event.id}`,
+      title: "External storage detected",
+      message: "Storage access is governed by company policy. Ask your administrator if this device should be allowed.",
+      page: "activity",
+      severity: "Warning"
+    };
+  }
+
   const failure = /(?:^|[.-])(?:error|failed|failure|unavailable)$/.test(event.type);
   if (failure) {
     return {

@@ -176,6 +176,7 @@ final class TelemetryCollector {
         }
         if (deviceOwner) {
             result.put("device.reboot")
+                    .put("device.wipe")
                     .put("policy.usb-data.block")
                     .put("policy.usb-data.allow")
                     .put("policy.safe-boot.block")

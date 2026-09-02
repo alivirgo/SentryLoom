@@ -334,6 +334,22 @@ export function createDashboardServer(engine, options = {}) {
           json(response, 200, await engine.setUsbStorageBlocked(Boolean(body.blocked)));
           return;
         }
+        if (request.method === "GET" && url.pathname === "/api/dlp/documents") {
+          json(response, 200, { documents: await engine.listDlpDocuments() });
+          return;
+        }
+        const dlpLabelMatch = url.pathname.match(/^\/api\/dlp\/documents\/([a-f0-9]{64})\/label$/i);
+        if (request.method === "POST" && dlpLabelMatch) {
+          const body = await bodyJson(request);
+          json(response, 200, await engine.setDocumentLabel(dlpLabelMatch[1], body.label));
+          return;
+        }
+        if (request.method === "POST" && url.pathname === "/api/dlp/authorize-transfer") {
+          const body = await bodyJson(request);
+          const decision = await engine.authorizeDlpTransfer(body);
+          json(response, decision.allowed ? 200 : 403, decision);
+          return;
+        }
         if (request.method === "GET" && url.pathname === "/api/reputation") {
           const value = url.searchParams.get("value") || "";
           if (!value || value.length > 2048) {

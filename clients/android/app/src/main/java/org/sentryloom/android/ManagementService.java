@@ -166,6 +166,11 @@ public final class ManagementService extends Service {
                     Thread.sleep(500);
                     executor.reboot();
                 }
+                if (executor.shouldWipe(command, output)) {
+                    Thread.sleep(500);
+                    executor.wipe();
+                    return;
+                }
             } catch (Exception error) {
                 result(client, credentials, id, "failed", new JSONObject()
                         .put("error", String.valueOf(error.getMessage()))

@@ -4,6 +4,8 @@
 
 <h1 align="center">SentryLoom</h1>
 
+<p align="center">Current release: Endpoint <strong>0.17.0</strong> · HQ <strong>0.5.0</strong> · Android <strong>0.3.0</strong></p>
+
 <p align="center">
   Open-source, offline-first cross-platform endpoint security with local antivirus
   scanning, behavioral monitoring, encrypted quarantine, community threat

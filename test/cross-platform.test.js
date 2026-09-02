@@ -8,7 +8,7 @@ import {
 import { parseDfOutput } from "../src/lib/system-information.js";
 import { parseLsblkJson, parsePsOutput } from "../src/lib/unix-telemetry.js";
 import { parseLsofOutput, parseSsOutput } from "../src/lib/network-monitor.js";
-import { deviceSupportsCommand } from "../server/src/server.js";
+import { deviceSupportsCommand, validWipeConfirmation } from "../server/src/server.js";
 
 test("platform capabilities expose only implemented controls", () => {
   assert.equal(platformFamily("win32"), "windows");
@@ -18,6 +18,9 @@ test("platform capabilities expose only implemented controls", () => {
   assert.ok(endpointCapabilities("darwin").includes("service.launchd"));
   assert.ok(!endpointCapabilities("darwin").includes("control.firewall-ioc"));
   assert.ok(supportedCommands("win32").includes("client.update"));
+  assert.ok(supportedCommands("win32").includes("device.lock"));
+  assert.ok(supportedCommands("win32").includes("policy.external-storage.block"));
+  assert.ok(!supportedCommands("linux").includes("device.wipe-company-data"));
   assert.ok(!supportedCommands("linux").includes("client.update"));
 });
 
@@ -26,6 +29,13 @@ test("HQ capability negotiation rejects actions an endpoint did not advertise", 
   assert.equal(deviceSupportsCommand(modern, "scan.quick"), true);
   assert.equal(deviceSupportsCommand(modern, "client.update"), false);
   assert.equal(deviceSupportsCommand({ status: {} }, "client.update"), true);
+});
+
+test("HQ destructive wipe confirmation is bound to the selected device name", () => {
+  const device = { name: "FINANCE-LAPTOP-07" };
+  assert.equal(validWipeConfirmation(device, "WIPE FINANCE-LAPTOP-07"), true);
+  assert.equal(validWipeConfirmation(device, "WIPE"), false);
+  assert.equal(validWipeConfirmation(device, "WIPE OTHER-LAPTOP"), false);
 });
 
 test("Unix process, storage, and removable-media parsers are bounded and deterministic", () => {

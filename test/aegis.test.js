@@ -37,6 +37,8 @@ const {
 const { AntivirusEngine } = await import("../src/lib/engine.js");
 const { createDashboardServer } = await import("../src/server.js");
 const { notificationForEvent } = await import("../src/lib/windows-notifications.js");
+const { authorizeTransfer, DLP_LABELS } = await import("../src/lib/dlp-labels.js");
+const { validateWipeRoots } = await import("../src/lib/device-actions.js");
 const { consumeUiCommand, validDashboardPage } = await import("../src/lib/ui-command.js");
 const {
   RealtimeProtection,
@@ -364,15 +366,32 @@ test("client upgrades preserve stored settings and record a versioned migration"
     currentVersion: "0.16.1"
   }));
   const config = await loadConfig();
-  assert.equal(config.schemaVersion, 2);
+  assert.equal(config.schemaVersion, 3);
   assert.equal(config.protection.realtimeEnabled, false);
   assert.equal(config.protection.downloadsDeepScanEnabled, true);
   assert.deepEqual(config.scanner.exclusions, ["C:\\Preserve-Me"]);
   const migration = JSON.parse(await fs.readFile(path.join(data, "upgrade-state.json"), "utf8"));
   assert.equal(migration.previousVersion, "0.16.1");
-  assert.equal(migration.currentVersion, "0.16.12");
+  assert.equal(migration.currentVersion, "0.17.0");
   const backups = await fs.readdir(path.join(data, "upgrade-backups"));
   assert.equal(backups.some((name) => name.startsWith("config-0.16.1-")), true);
+});
+
+test("Super Confidential DLP denies monitored transfers unless destination is explicitly allowed", () => {
+  assert.deepEqual(DLP_LABELS, ["public", "internal", "confidential", "super-confidential"]);
+  const document = { label: "super-confidential" };
+  assert.equal(authorizeTransfer(document, "email", "outside.example", []).allowed, false);
+  assert.equal(authorizeTransfer(document, "internet", "files.company.example", ["company.example"]).allowed, true);
+  assert.equal(authorizeTransfer({ label: "confidential" }, "email", "outside.example", []).allowed, true);
+  assert.throws(() => authorizeTransfer(document, "unknown", "outside.example", []));
+});
+
+test("remote company-data wipe accepts only exact configured non-root directories", async () => {
+  const root = await sandbox("wipe-policy");
+  const managed = path.join(root, "company-data");
+  assert.deepEqual(validateWipeRoots([managed], [managed]), [path.resolve(managed)]);
+  assert.throws(() => validateWipeRoots([path.join(root, "personal")], [managed]), /outside managed/);
+  assert.throws(() => validateWipeRoots([path.parse(root).root], [path.parse(root).root]), /Unsafe/);
 });
 
 test("exact EICAR signature is confirmed and clean files remain clean", async () => {
@@ -834,7 +853,7 @@ test("managed client replaces a preserved HQ target, encrypts enrollment, and ex
     connector.running = true;
     await connector.pulse();
     assert.equal(connector.status().enrolled, true);
-    assert.equal(connector.status().hqVersion, "0.4.6");
+    assert.equal(connector.status().hqVersion, "0.5.0");
     assert.equal(connector.status().maintenanceAuthorizationSupported, true);
     assert.equal(connector.status().abuseChGatewayConfigured, false);
     for (let attempt = 0; attempt < 20 &&

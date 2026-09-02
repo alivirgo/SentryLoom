@@ -44,6 +44,23 @@ export async function discoverFixedDrives() {
   }
 }
 
+export async function discoverUsbStorageDevices() {
+  if (process.platform !== "win32") return [];
+  const output = await runPowerShell(
+    "Get-CimInstance Win32_DiskDrive | Where-Object { $_.InterfaceType -eq 'USB' } | Select-Object DeviceID,Model,SerialNumber,PNPDeviceID,Size | ConvertTo-Json -Compress",
+    20000
+  );
+  if (!output) return [];
+  const parsed = JSON.parse(output);
+  return (Array.isArray(parsed) ? parsed : [parsed]).map((item) => ({
+    id: String(item.PNPDeviceID || item.DeviceID || "").slice(0, 500),
+    deviceId: String(item.DeviceID || "").slice(0, 200),
+    model: String(item.Model || "USB storage").slice(0, 200),
+    serialNumber: String(item.SerialNumber || "").trim().slice(0, 200),
+    size: Number(item.Size) || 0
+  })).filter((item) => item.id);
+}
+
 export async function isProcessElevated() {
   if (process.platform !== "win32") return typeof process.getuid === "function" ? process.getuid() === 0 : false;
   try {

@@ -803,13 +803,34 @@ $("#device-dialog").addEventListener("click", async (event) => {
       !window.confirm(`Silently update ${device?.name || "this endpoint"} to the latest signed HQ release?`)) return;
   if (["device.lock", "device.reboot"].includes(type) &&
       !window.confirm(`${humanLabel(type)} on ${device?.name || "this endpoint"} now?`)) return;
+  let confirmation;
+  let payload = {};
+  if (["device.wipe", "device.wipe-company-data"].includes(type)) {
+    confirmation = prompt(
+      `${humanLabel(type)} is destructive and cannot be undone. Type WIPE ${device?.name} to continue:`
+    );
+    if (confirmation !== `WIPE ${device?.name}`) {
+      toast("Wipe cancelled: confirmation did not match.");
+      return;
+    }
+  }
+  if (type === "dlp.policy.set") {
+    const roots = prompt("Managed company-data folders, separated by semicolons. These are the only folders eligible for remote company-data wipe:");
+    if (roots === null) return;
+    const destinations = prompt("Destinations allowed to receive Super Confidential documents, separated by commas (for example secure.company.example):", "");
+    if (destinations === null) return;
+    payload = {
+      protectedRoots: roots.split(";").map((item) => item.trim()).filter(Boolean),
+      allowedDestinations: destinations.split(",").map((item) => item.trim()).filter(Boolean)
+    };
+  }
   if (type.startsWith("policy.") &&
       !window.confirm(`Apply ${humanLabel(type)} to ${device?.name || "this endpoint"}?`)) return;
   try {
     button.disabled = true;
     await api(`/api/admin/devices/${selectedDeviceId}/commands`, {
       method: "POST",
-      body: JSON.stringify({ type, payload: {} })
+      body: JSON.stringify({ type, payload, confirmation })
     });
     toast(`${humanLabel(type)} queued for ${device?.name || "endpoint"}`);
     await refreshDeviceDetails(true);

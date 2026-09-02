@@ -49,6 +49,15 @@ export function validateConfig(config) {
     errors.push("scanner.clamavDirectoryTimeoutMs must be between 60000 and 14400000");
   }
   if (!Array.isArray(config.scanner?.exclusions)) errors.push("scanner.exclusions must be an array");
+  if (!Array.isArray(config.dataLossPrevention?.protectedRoots) ||
+      config.dataLossPrevention.protectedRoots.some((root) => typeof root !== "string" || !root.trim())) {
+    errors.push("dataLossPrevention.protectedRoots must be an array of paths");
+  }
+  if (!Array.isArray(config.dataLossPrevention?.superConfidentialAllowedDestinations) ||
+      config.dataLossPrevention.superConfidentialAllowedDestinations.some((item) =>
+        typeof item !== "string" || !item.trim() || item.length > 255)) {
+    errors.push("dataLossPrevention.superConfidentialAllowedDestinations must be an array of destinations");
+  }
   if (!Number.isInteger(config.dashboard?.port) || config.dashboard.port < 1024 || config.dashboard.port > 65535) {
     errors.push("dashboard.port must be between 1024 and 65535");
   }

@@ -15,7 +15,7 @@ import { ThreatGateway } from "./threat-gateway.js";
 const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 const publicDirectory = path.resolve(moduleDirectory, "..", "public");
 const DISCOVERY_REQUEST = "SENTRYLOOM_HQ_DISCOVER_V1";
-const HQ_VERSION = "0.4.6";
+const HQ_VERSION = "0.5.0";
 const DEFAULT_UPDATE_STAGING = "Z:\\Extreme Control\\SentryLoom Updates";
 const HQ_CAPABILITIES = Object.freeze([
   "verified-enrollment-v1",
@@ -48,7 +48,14 @@ const COMMAND_TYPES = new Set([
   "scan.apps",
   "inventory.refresh",
   "device.lock",
+  "device.wipe",
+  "device.wipe-company-data",
   "device.reboot",
+  "dlp.labeling.enable",
+  "dlp.labeling.disable",
+  "dlp.policy.set",
+  "policy.external-storage.block",
+  "policy.external-storage.allow",
   "policy.bluetooth-sharing.block",
   "policy.bluetooth-sharing.allow",
   "policy.camera.block",
@@ -70,6 +77,9 @@ export function deviceSupportsCommand(device, type) {
   // Clients predating capability negotiation are Windows-only and supported
   // every command in the original allowlist.
   return !Array.isArray(advertised) || advertised.includes(type);
+}
+export function validWipeConfirmation(device, supplied) {
+  return Boolean(device?.name) && supplied === `WIPE ${device.name}`;
 }
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -272,18 +282,22 @@ export function buildAdminAlerts(store, options = {}) {
         (type === "scan.completed" && Number(event.result?.detections) > 0) ||
         (type === "windows.security-event" && Number(event.event?.eventId) === 1116);
       const failure = /(?:^|[.-])(?:error|failed|failure|unavailable)$/.test(type);
-      if (!detection && !failure) continue;
+      const dataProtection = type === "device-control.external-storage-detected" ||
+        type === "dlp.transfer-blocked" || type === "dlp.document-label-required";
+      if (!detection && !failure && !dataProtection) continue;
       alerts.push({
         id: `event:${device.id}:${event.id || crypto.createHash("sha256").update(
           `${type}|${event.at || ""}|${alertMessage(event)}`
         ).digest("hex").slice(0, 20)}`,
-        kind: detection ? "detection" : "failure",
-        severity: detection ? "critical" : "warning",
+        kind: detection ? "detection" : dataProtection ? "data-protection" : "failure",
+        severity: detection || type === "dlp.transfer-blocked" ? "critical" : "warning",
         deviceId: device.id,
         deviceName: device.name,
         at: event.at || device.lastSeen,
         title: detection
           ? `${device.name}: threat detected`
+          : dataProtection
+            ? `${device.name}: data protection alert`
           : `${device.name}: operation failed`,
         message: alertMessage(event),
         eventType: type
@@ -923,6 +937,22 @@ export async function createHqServer(config, options = {}) {
           if (!device || !deviceSupportsCommand(device, body.type)) {
             sendJson(response, 409, { error: "This action is not supported by the selected endpoint" });
             return;
+          }
+          if ((body.type === "device.wipe" || body.type === "device.wipe-company-data") &&
+              !validWipeConfirmation(device, body.confirmation)) {
+            sendJson(response, 400, { error: `Type WIPE ${device.name} to confirm this destructive action` });
+            return;
+          }
+          if (body.type === "dlp.policy.set") {
+            const roots = body.payload?.protectedRoots;
+            const destinations = body.payload?.allowedDestinations;
+            if (!Array.isArray(roots) || roots.length > 25 || roots.some((item) =>
+              typeof item !== "string" || !item.trim() || item.length > 1024) ||
+              !Array.isArray(destinations) || destinations.length > 100 || destinations.some((item) =>
+                typeof item !== "string" || !item.trim() || item.length > 255)) {
+              sendJson(response, 400, { error: "DLP roots or allowed destinations are invalid" });
+              return;
+            }
           }
           sendJson(response, 201, store.createCommand(commandMatch[1], body.type, body.payload));
           return;

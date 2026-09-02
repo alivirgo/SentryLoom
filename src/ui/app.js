@@ -193,6 +193,24 @@ function renderStatus(status) {
   renderPosture(status.posture, status.runtime);
   renderProgress(status);
   renderThreatIntel(status);
+  renderDlp(status.dataLossPrevention);
+}
+
+function renderDlp(dlp) {
+  const host = $("#dlp-documents");
+  if (!host) return;
+  const documents = (dlp?.documents || []).slice(0, 50);
+  host.innerHTML = documents.length ? documents.map((document) => `
+    <div class="activity-item">
+      <span><strong>${escapeHtml(document.path.split(/[\\/]/).pop())}</strong><small>${escapeHtml(document.path)}</small></span>
+      <select data-dlp-document="${escapeHtml(document.id)}" aria-label="Document classification">
+        <option value="">Choose label…</option>
+        ${["public", "internal", "confidential", "super-confidential"].map((label) =>
+          `<option value="${label}" ${document.label === label ? "selected" : ""}>${escapeHtml(label.replaceAll("-", " "))}</option>`
+        ).join("")}
+      </select>
+    </div>
+  `).join("") : `<div class="empty">No documents are waiting for classification.</div>`;
 }
 
 function renderHq(status) {
@@ -1165,6 +1183,22 @@ $("#quarantine-table").addEventListener("click", async (event) => {
 });
 
 syncThemeButton();
+$("#dlp-documents")?.addEventListener("change", async (event) => {
+  const select = event.target.closest("[data-dlp-document]");
+  if (!select?.value) return;
+  try {
+    select.disabled = true;
+    await api(`/api/dlp/documents/${select.dataset.dlpDocument}/label`, {
+      method: "POST",
+      body: JSON.stringify({ label: select.value })
+    });
+    toast(`Document labeled ${select.value.replaceAll("-", " ")}`);
+    await refresh(false);
+  } catch (error) {
+    select.disabled = false;
+    toast(error.message, true);
+  }
+});
 await refresh(true);
 const initialPage = new URLSearchParams(window.location.search).get("page");
 if (["overview", "scan", "quarantine", "activity", "settings"].includes(initialPage)) {

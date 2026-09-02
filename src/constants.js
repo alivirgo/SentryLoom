@@ -2,7 +2,7 @@ import os from "node:os";
 import path from "node:path";
 
 export const APP_NAME = "SentryLoom Endpoint Security";
-export const APP_VERSION = "0.16.12";
+export const APP_VERSION = "0.17.0";
 
 export function dataDirectory() {
   if (process.env.SENTRYLOOM_DATA_DIR) return path.resolve(process.env.SENTRYLOOM_DATA_DIR);
@@ -56,7 +56,7 @@ export function appPaths() {
 }
 
 export const DEFAULT_CONFIG = Object.freeze({
-  schemaVersion: 2,
+  schemaVersion: 3,
   protection: {
     realtimeEnabled: true,
     monitorAllFixedDrives: true,
@@ -87,6 +87,12 @@ export const DEFAULT_CONFIG = Object.freeze({
   },
   management: {
     enabled: false
+  },
+  dataLossPrevention: {
+    labelingEnabled: false,
+    protectedRoots: [],
+    requireLabelBeforeExternalTransfer: true,
+    superConfidentialAllowedDestinations: []
   },
   schedule: {
     quickScan: "daily",

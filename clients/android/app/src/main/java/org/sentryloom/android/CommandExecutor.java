@@ -53,6 +53,9 @@ final class CommandExecutor {
                 requireAdmin();
                 policy.lockNow();
                 return new JSONObject().put("lockedAt", TelemetryCollector.isoNow());
+            case "device.wipe":
+                requireDeviceOwner();
+                return new JSONObject().put("wipeRequired", true).put("acceptedAt", TelemetryCollector.isoNow());
             case "device.reboot":
                 requireDeviceOwner();
                 // The acknowledgement is posted before reboot by the connector.
@@ -127,6 +130,15 @@ final class CommandExecutor {
     boolean shouldReboot(JSONObject command, JSONObject result) {
         return "device.reboot".equals(command.optString("type")) &&
                 result.optBoolean("rebootRequired");
+    }
+
+    boolean shouldWipe(JSONObject command, JSONObject result) {
+        return "device.wipe".equals(command.optString("type")) && result.optBoolean("wipeRequired");
+    }
+
+    void wipe() {
+        requireDeviceOwner();
+        policy.wipeData(0);
     }
 
     void reboot() {
