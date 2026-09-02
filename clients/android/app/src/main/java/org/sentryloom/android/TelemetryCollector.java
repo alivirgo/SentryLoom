@@ -161,7 +161,8 @@ final class TelemetryCollector {
                 .put("scan.quick")
                 .put("scan.apps")
                 .put("inventory.refresh")
-                .put("protection.restart");
+                .put("protection.restart")
+                .put("management.disconnect");
         if (adminActive) result.put("device.lock");
         if (deviceOwner || profileOwner) {
             result.put("policy.bluetooth-sharing.block")

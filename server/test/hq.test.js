@@ -279,12 +279,40 @@ test("HQ UI exposes staged publishing, Wake-on-LAN, and verified re-enrollment",
   assert.match(html, /id="setting-staging-directory"/);
   assert.match(html, /data-wake>Wake on LAN/);
   assert.match(html, /data-reauthorize[^>]*>Revoke credential &amp; re-enroll/);
+  assert.match(html, /data-offboard[^>]*>Offboard endpoint/);
   assert.match(html, /id="save-server-abuse-key"/);
   assert.match(app, /\/api\/admin\/update\/publish-latest/);
   assert.match(app, /\/api\/admin\/devices\/\$\{selectedDeviceId\}\/wake/);
   assert.match(app, /6-digit verification code displayed on the client device/);
   assert.match(app, /\/api\/admin\/devices\/\$\{selectedDeviceId\}\/revoke/);
+  assert.match(app, /\/api\/admin\/devices\/\$\{selectedDeviceId\}\/offboard/);
   assert.match(app, /\/api\/admin\/threat-credentials/);
+});
+
+test("completed offboarding revokes the server credential", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "sentryloom-offboard-"));
+  const store = await new HqStore(path.join(root, "hq.sqlite")).open();
+  try {
+    const enrollment = store.enrollDevice({
+      installationId: crypto.randomUUID(),
+      name: "Retiring endpoint",
+      hostname: "RETIRE-01",
+      platform: "win32",
+      appVersion: "0.16.11"
+    }, "127.0.0.1");
+    const command = store.createCommand(enrollment.id, "management.disconnect", {});
+    assert.equal(store.completeCommand(
+      enrollment.id,
+      command.id,
+      "completed",
+      { accepted: true }
+    ), true);
+    assert.ok(store.getDevice(enrollment.id).revokedAt);
+    assert.equal(store.authenticateDevice(enrollment.id, enrollment.token), null);
+  } finally {
+    store.close();
+    await fs.rm(root, { recursive: true, force: true });
+  }
 });
 
 test("HQ enrolls, authenticates telemetry, and delivers allowlisted commands", async () => {

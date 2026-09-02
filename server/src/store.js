@@ -753,6 +753,12 @@ export class HqStore {
       SET status = ?, completed_at = ?, result_json = ?
       WHERE id = ? AND device_id = ?
     `).run(status, completedAt, JSON.stringify(result || {}), commandId, deviceId);
+    if (updated.changes > 0 && status === "completed") {
+      const command = this.database.prepare(
+        "SELECT type FROM commands WHERE id = ? AND device_id = ?"
+      ).get(commandId, deviceId);
+      if (command?.type === "management.disconnect") this.revokeDevice(deviceId);
+    }
     return updated.changes > 0;
   }
 

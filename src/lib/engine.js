@@ -567,14 +567,31 @@ export class AntivirusEngine {
   }
 
   async getDashboardData() {
+    const unavailable = (component, error, fallback = {}) => ({
+      ...fallback,
+      available: false,
+      error: `${component} status is unavailable: ${error.message}`
+    });
     const [status, quarantine, history, audit, dnsFiltering, firewallPolicy, deviceControl] = await Promise.all([
       this.getStatus(),
       listQuarantine(),
       readScanHistory(30),
       readRecentAudit(50),
-      this.getDnsFilteringStatus(),
-      this.getFirewallPolicyStatus(),
-      this.getDeviceControlStatus()
+      this.getDnsFilteringStatus().catch((error) => unavailable("DNS filtering", error, {
+        supported: process.platform === "win32",
+        adapters: [],
+        profiles: []
+      })),
+      this.getFirewallPolicyStatus().catch((error) => unavailable("Firewall policy", error, {
+        supported: ["win32", "linux"].includes(process.platform),
+        blockedAddresses: 0,
+        rules: []
+      })),
+      this.getDeviceControlStatus().catch((error) => unavailable("Device control", error, {
+        supported: process.platform === "win32",
+        blocked: false,
+        configured: false
+      }))
     ]);
     return { status, quarantine, history, audit, config: this.config, dnsFiltering, firewallPolicy, deviceControl };
   }
@@ -930,6 +947,16 @@ export class AntivirusEngine {
       await this.stopProtection();
       await this.startProtection();
       return { restartedAt: new Date().toISOString() };
+    }
+    if (type === "management.disconnect") {
+      const disconnectedAt = new Date().toISOString();
+      const timer = setTimeout(() => {
+        void this.disconnectHq().catch((error) => {
+          this.emit({ type: "hq.offboarding-error", error: error.message });
+        });
+      }, 250);
+      timer.unref?.();
+      return { accepted: true, disconnectedAt };
     }
     throw new Error(`HQ command is not allowed: ${type}`);
   }

@@ -773,6 +773,28 @@ $("#device-dialog").addEventListener("click", async (event) => {
     }
     return;
   }
+  const offboardButton = event.target.closest("[data-offboard]");
+  if (offboardButton && selectedDeviceId) {
+    const device = devices.find((item) => item.id === selectedDeviceId);
+    if (!window.confirm(
+      `Offboard ${device?.name || "this endpoint"}? It will erase its HQ credential and continue as a standalone protected device. The command remains queued if it is offline.`
+    )) return;
+    try {
+      offboardButton.disabled = true;
+      await api(`/api/admin/devices/${selectedDeviceId}/offboard`, {
+        method: "POST",
+        body: "{}"
+      });
+      toast(`Offboarding queued for ${device?.name || "endpoint"}.`);
+      $("#device-dialog").close();
+      await refresh();
+    } catch (error) {
+      toast(error.message);
+    } finally {
+      offboardButton.disabled = false;
+    }
+    return;
+  }
   const button = event.target.closest("[data-command]");
   const type = button?.dataset.command;
   if (!type || !selectedDeviceId) return;

@@ -9,7 +9,8 @@ const COMMON_COMMANDS = Object.freeze([
   "scan.cancel",
   "update.databases",
   "protection.fix-all",
-  "protection.restart"
+  "protection.restart",
+  "management.disconnect"
 ]);
 
 export function platformFamily(platform = process.platform) {

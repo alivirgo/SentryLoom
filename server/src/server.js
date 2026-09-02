@@ -44,6 +44,7 @@ const COMMAND_TYPES = new Set([
   "client.update",
   "protection.fix-all",
   "protection.restart",
+  "management.disconnect",
   "scan.apps",
   "inventory.refresh",
   "device.lock",
@@ -939,6 +940,26 @@ export async function createHqServer(config, options = {}) {
         const revokeMatch = url.pathname.match(/^\/api\/admin\/devices\/([a-f0-9-]{36})\/revoke$/i);
         if (revokeMatch && request.method === "POST") {
           sendJson(response, 200, { revoked: store.revokeDevice(revokeMatch[1]) });
+          return;
+        }
+        const offboardMatch = url.pathname.match(/^\/api\/admin\/devices\/([a-f0-9-]{36})\/offboard$/i);
+        if (offboardMatch && request.method === "POST") {
+          const device = store.getDevice(offboardMatch[1]);
+          if (!device || device.revokedAt) {
+            sendJson(response, 404, { error: "Managed device was not found" });
+            return;
+          }
+          if (!deviceSupportsCommand(device, "management.disconnect")) {
+            sendJson(response, 409, {
+              error: "Update this endpoint before using remote offboarding"
+            });
+            return;
+          }
+          sendJson(response, 202, store.ensureCommand(
+            offboardMatch[1],
+            "management.disconnect",
+            { requestedAt: new Date().toISOString() }
+          ));
           return;
         }
         sendJson(response, 404, { error: "Administrator API route not found" });

@@ -158,6 +158,10 @@ publish the service directly to the public internet.
 - Enrollment requests require no client-side user authentication, are rate-limited, and require explicit administrator approval.
 - Pending clients use an automatically generated high-entropy request secret so another machine cannot claim an approved credential.
 - Each endpoint receives an independent revocable 256-bit token.
+- **Offboard endpoint** queues an authenticated command that removes the HQ
+  credential from the endpoint, disables management, and then revokes the
+  server-side credential after acknowledgement. Offline devices complete the
+  workflow automatically when they reconnect.
 - Clients pin the TLS certificate fingerprint, including with a self-signed HQ certificate.
 - The server can queue only predefined SentryLoom actions; it has no shell-command API.
 - Local protection continues if HQ is offline.

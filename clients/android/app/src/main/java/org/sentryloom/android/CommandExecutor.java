@@ -45,6 +45,10 @@ final class CommandExecutor {
             case "protection.restart":
                 return new AndroidProtectionEngine(context).runProtectionCycle()
                         .put("restartedAt", TelemetryCollector.isoNow());
+            case "management.disconnect":
+                return new JSONObject()
+                        .put("accepted", true)
+                        .put("disconnectedAt", TelemetryCollector.isoNow());
             case "device.lock":
                 requireAdmin();
                 policy.lockNow();

@@ -155,6 +155,13 @@ public final class ManagementService extends Service {
                                 .put("commandType", command.optString("type"))
                                 .put("result", output)
                 );
+                if ("management.disconnect".equals(command.optString("type"))) {
+                    state.clearEnrollment();
+                    state.setServiceEnabled(false);
+                    state.setStatus("Offboarded from SentryLoom HQ");
+                    stopSelf();
+                    return;
+                }
                 if (executor.shouldReboot(command, output)) {
                     Thread.sleep(500);
                     executor.reboot();

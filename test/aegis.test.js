@@ -1886,3 +1886,14 @@ test("revoked clients automatically re-enroll with their pinned HQ", async () =>
     await fs.rm(dbFile, { force: true }).catch(() => {});
   }
 });
+
+test("remote offboarding acknowledges before disconnecting management", async () => {
+  const engine = new AntivirusEngine();
+  let disconnected = false;
+  engine.disconnectHq = async () => { disconnected = true; };
+  const result = await engine.executeHqCommand({ type: "management.disconnect" });
+  assert.equal(result.accepted, true);
+  assert.equal(disconnected, false, "the result must be acknowledged before credentials are cleared");
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.equal(disconnected, true);
+});
