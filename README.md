@@ -1,3 +1,5 @@
+[![Hits](https://hits.sh/github.com/alivirgo/SentryLoom.svg)](https://hits.sh/github.com/alivirgo/SentryLoom/)
+
 <p align="center">
   <img src="assets/sentryloom-icon.png" width="112" alt="SentryLoom shield logo">
 </p>
