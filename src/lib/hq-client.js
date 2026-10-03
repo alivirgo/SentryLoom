@@ -19,8 +19,8 @@ import { appPaths } from "../constants.js";
 import { ensureDirectory } from "./fs-safe.js";
 import { clearThreatCredentials } from "./credential-store.js";
 
-const DISCOVERY_REQUEST = "SENTRYLOOM_HQ_DISCOVER_V1";
-const ENROLLMENT_VERIFICATION_CONTEXT = "sentryloom-enrollment-v1";
+const DISCOVERY_REQUEST = "ENDPOINTWARD_HQ_DISCOVER_V1";
+const ENROLLMENT_VERIFICATION_CONTEXT = "endpointward-enrollment-v1";
 
 export function generateHqVerificationCode() {
   return crypto.randomInt(0, 1_000_000).toString().padStart(6, "0");
@@ -87,7 +87,7 @@ export function normalizeFingerprint(value) {
 export function normalizeHqUrl(value, options = {}) {
   const url = new URL(String(value || "").trim());
   if (url.protocol !== "https:" && !(options.allowHttp && url.protocol === "http:")) {
-    throw new Error("SentryLoom HQ must use HTTPS");
+    throw new Error("Endpointward HQ must use HTTPS");
   }
   url.pathname = "";
   url.search = "";
@@ -99,7 +99,7 @@ export function hqRequest(serverUrl, route, options = {}) {
   const url = new URL(route, `${serverUrl}/`);
   const expectedFingerprint = normalizeFingerprint(options.fingerprint256);
   const isHttps = url.protocol === "https:";
-  if (!isHttps && !options.allowHttp) return Promise.reject(new Error("SentryLoom HQ must use HTTPS"));
+  if (!isHttps && !options.allowHttp) return Promise.reject(new Error("Endpointward HQ must use HTTPS"));
   const transport = isHttps ? https : http;
   const serialized = options.body === undefined ? null : JSON.stringify(options.body);
   const maximumResponseBytes = Math.max(
@@ -136,7 +136,7 @@ export function hqRequest(serverUrl, route, options = {}) {
         } : {}),
         ...(options.credentials ? {
           Authorization: `Bearer ${options.credentials.token}`,
-          "X-SentryLoom-Device": options.credentials.deviceId
+          "X-Endpointward-Device": options.credentials.deviceId
         } : {}),
         ...(options.enrollmentSecret ? {
           Authorization: `Enrollment ${options.enrollmentSecret}`
@@ -201,7 +201,7 @@ export async function downloadHqPackage(credentials, route, destination, expecte
   const serverUrl = normalizeHqUrl(credentials.serverUrl, { allowHttp: options.allowHttp });
   const url = new URL(route, `${serverUrl}/`);
   const isHttps = url.protocol === "https:";
-  if (!isHttps && !options.allowHttp) throw new Error("SentryLoom HQ must use HTTPS");
+  if (!isHttps && !options.allowHttp) throw new Error("Endpointward HQ must use HTTPS");
   const expectedFingerprint = normalizeFingerprint(credentials.fingerprint256);
   const maximumBytes = Math.min(1024 * 1024 * 1024, Math.max(1024, Number(options.maximumBytes) || expected.size));
   const transport = isHttps ? https : http;
@@ -228,7 +228,7 @@ export async function downloadHqPackage(credentials, route, destination, expecte
         headers: {
           Accept: "application/octet-stream",
           Authorization: `Bearer ${credentials.token}`,
-          "X-SentryLoom-Device": credentials.deviceId
+          "X-Endpointward-Device": credentials.deviceId
         }
       }, async (response) => {
         try {
@@ -250,7 +250,7 @@ export async function downloadHqPackage(credentials, route, destination, expecte
           if (!Number.isSafeInteger(contentLength) || contentLength !== expected.size || contentLength > maximumBytes) {
             throw new Error("HQ update package size does not match its manifest");
           }
-          if (String(response.headers["x-sentryloom-sha256"] || "").toUpperCase() !== expected.sha256) {
+          if (String(response.headers["x-endpointward-sha256"] || "").toUpperCase() !== expected.sha256) {
             throw new Error("HQ update package header does not match its manifest");
           }
           const hash = crypto.createHash("sha256");
@@ -325,7 +325,7 @@ export async function discoverHqServers(options = {}) {
     socket.on("message", (message, remote) => {
       try {
         const candidate = JSON.parse(message.toString("utf8"));
-        if (candidate.protocol !== "sentryloom-hq/1") return;
+        if (candidate.protocol !== "endpointward-hq/1") return;
         const url = normalizeHqUrl(candidate.url);
         const fingerprint256 = normalizeFingerprint(candidate.fingerprint256);
         if (!fingerprint256) return;
@@ -333,7 +333,7 @@ export async function discoverHqServers(options = {}) {
         const addressHost = remote.address.includes(":") ? `[${remote.address}]` : remote.address;
         const connectionUrl = `${advertised.protocol}//${addressHost}${advertised.port ? `:${advertised.port}` : ""}`;
         servers.set(`${connectionUrl}|${fingerprint256}`, {
-          name: String(candidate.name || "SentryLoom HQ").slice(0, 100),
+          name: String(candidate.name || "Endpointward HQ").slice(0, 100),
           url: connectionUrl,
           advertisedUrl: url,
           fingerprint256,
@@ -410,7 +410,7 @@ export async function probeHq(serverUrl, options = {}) {
   }
   return {
     serverUrl: normalizedUrl,
-    hqName: String(identityResponse.body.name || "SentryLoom HQ"),
+    hqName: String(identityResponse.body.name || "Endpointward HQ"),
     fingerprint256: identityResponse.fingerprint256,
     capabilities: Array.isArray(identityResponse.body.capabilities)
       ? identityResponse.body.capabilities.map(String)
@@ -419,7 +419,7 @@ export async function probeHq(serverUrl, options = {}) {
 }
 
 export async function requestHqEnrollment(options = {}) {
-  const allowHttp = Boolean(options.allowHttp || process.env.SENTRYLOOM_ALLOW_INSECURE_HQ === "1");
+  const allowHttp = Boolean(options.allowHttp || process.env.ENDPOINTWARD_ALLOW_INSECURE_HQ === "1");
   const verificationCode = options.verificationCode === undefined
     ? generateHqVerificationCode()
     : String(options.verificationCode).trim();
@@ -430,8 +430,8 @@ export async function requestHqEnrollment(options = {}) {
   let discovered = null;
   if (!options.serverUrl) {
     const servers = await discoverHqServers(options);
-    if (!servers.length) throw new Error("No SentryLoom HQ server was found on this network");
-    if (servers.length > 1) throw new Error("Multiple HQ servers were found; choose one in SentryLoom Settings");
+    if (!servers.length) throw new Error("No Endpointward HQ server was found on this network");
+    if (servers.length > 1) throw new Error("Multiple HQ servers were found; choose one in Endpointward Settings");
     discovered = servers[0];
   }
   const serverUrl = normalizeHqUrl(options.serverUrl || discovered.url, { allowHttp });
@@ -442,7 +442,7 @@ export async function requestHqEnrollment(options = {}) {
   });
   if (!identity.capabilities.includes("verified-enrollment-v1")) {
     throw new Error(
-      "This HQ server does not support verified enrollment. Upgrade SentryLoom HQ before connecting this client."
+      "This HQ server does not support verified enrollment. Upgrade Endpointward HQ before connecting this client."
     );
   }
   const response = await hqRequest(serverUrl, "/api/v1/enrollment-requests", {
@@ -477,9 +477,9 @@ export async function requestHqEnrollment(options = {}) {
 }
 
 export async function relocateHq(credentials, options = {}) {
-  if (!credentials) throw new Error("This endpoint is not enrolled with SentryLoom HQ");
+  if (!credentials) throw new Error("This endpoint is not enrolled with Endpointward HQ");
   const allowHttp = Boolean(
-    options.allowHttp || process.env.SENTRYLOOM_ALLOW_INSECURE_HQ === "1"
+    options.allowHttp || process.env.ENDPOINTWARD_ALLOW_INSECURE_HQ === "1"
   );
   const serverUrl = normalizeHqUrl(options.serverUrl, { allowHttp });
   const fingerprint256 = normalizeFingerprint(credentials.fingerprint256);
@@ -517,7 +517,7 @@ export async function relocateHq(credentials, options = {}) {
 export async function recoverHqAddress(credentials, options = {}) {
   if (!credentials) return null;
   const allowHttp = Boolean(
-    options.allowHttp || process.env.SENTRYLOOM_ALLOW_INSECURE_HQ === "1"
+    options.allowHttp || process.env.ENDPOINTWARD_ALLOW_INSECURE_HQ === "1"
   );
   const expectedFingerprint = normalizeFingerprint(credentials.fingerprint256);
   if (!expectedFingerprint && !allowHttp) return null;
@@ -543,7 +543,7 @@ export async function recoverHqAddress(credentials, options = {}) {
 }
 
 export async function pollHqEnrollment(pending) {
-  const allowHttp = process.env.SENTRYLOOM_ALLOW_INSECURE_HQ === "1";
+  const allowHttp = process.env.ENDPOINTWARD_ALLOW_INSECURE_HQ === "1";
   const response = await hqRequest(
     pending.serverUrl,
     `/api/v1/enrollment-requests/${pending.requestId}`,
@@ -582,7 +582,7 @@ export async function pollHqEnrollment(pending) {
 }
 
 export async function authorizeHqMaintenance(credentials, password, action, options = {}) {
-  if (!credentials) throw new Error("This endpoint is not enrolled with SentryLoom HQ");
+  if (!credentials) throw new Error("This endpoint is not enrolled with Endpointward HQ");
   try {
     const response = await hqRequest(
       credentials.serverUrl,
@@ -592,7 +592,7 @@ export async function authorizeHqMaintenance(credentials, password, action, opti
         credentials,
         fingerprint256: credentials.fingerprint256,
         allowHttp: options.allowHttp ||
-          process.env.SENTRYLOOM_ALLOW_INSECURE_HQ === "1",
+          process.env.ENDPOINTWARD_ALLOW_INSECURE_HQ === "1",
         body: {
           password: String(password || ""),
           action: String(action || "critical-settings")
@@ -612,7 +612,7 @@ export async function authorizeHqMaintenance(credentials, password, action, opti
 }
 
 export async function fetchHqThreatFeed(credentials, source, options = {}) {
-  if (!credentials) throw new Error("This endpoint is not enrolled with SentryLoom HQ");
+  if (!credentials) throw new Error("This endpoint is not enrolled with Endpointward HQ");
   const normalizedSource = String(source || "").toLowerCase();
   if (!["malwarebazaar", "urlhaus", "threatfox"].includes(normalizedSource)) {
     throw new Error("The requested HQ threat-intelligence feed is not allowed");
@@ -624,7 +624,7 @@ export async function fetchHqThreatFeed(credentials, source, options = {}) {
       credentials,
       fingerprint256: credentials.fingerprint256,
       allowHttp: options.allowHttp ||
-        process.env.SENTRYLOOM_ALLOW_INSECURE_HQ === "1",
+        process.env.ENDPOINTWARD_ALLOW_INSECURE_HQ === "1",
       timeoutMs: Math.max(5000, Number(options.timeoutMs) || 120000),
       maximumResponseBytes: 110 * 1024 * 1024
     }
@@ -633,9 +633,9 @@ export async function fetchHqThreatFeed(credentials, source, options = {}) {
 }
 
 export async function requestHqMaintenancePassword(credentials, options = {}) {
-  if (!credentials) throw new Error("This endpoint is not enrolled with SentryLoom HQ");
+  if (!credentials) throw new Error("This endpoint is not enrolled with Endpointward HQ");
   const allowHttp = Boolean(
-    options.allowHttp || process.env.SENTRYLOOM_ALLOW_INSECURE_HQ === "1"
+    options.allowHttp || process.env.ENDPOINTWARD_ALLOW_INSECURE_HQ === "1"
   );
   const keys = crypto.generateKeyPairSync("rsa", {
     modulusLength: 2048,
@@ -970,7 +970,7 @@ export class HqConnector {
           type: "hq.connection-restored",
           hqName: this.credentials.hqName,
           serverUrl: this.credentials.serverUrl,
-          message: "Connection to SentryLoom HQ was restored"
+          message: "Connection to Endpointward HQ was restored"
         });
       }
       await this.persistState();

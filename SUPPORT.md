@@ -1,12 +1,12 @@
 # Support
 
-SentryLoom is community-supported open-source software.
+Endpointward is community-supported open-source software.
 
 - Use GitHub Discussions for deployment questions, ideas, and general help.
 - Use GitHub Issues for reproducible bugs and scoped feature requests.
 - Use GitHub private vulnerability reporting for security vulnerabilities.
 
-Include the SentryLoom version, Windows version, relevant sanitized logs,
+Include the Endpointward version, Windows version, relevant sanitized logs,
 expected behavior, actual behavior, and reproduction steps.
 
 Never publish credentials, tokens, certificates, PFX files, private keys,

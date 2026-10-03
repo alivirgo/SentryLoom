@@ -13,7 +13,7 @@ function detached(command, args) {
 export function showDetectionNotification(notification) {
   if (!notification) return false;
   if (process.platform === "win32") return showWindowsNotification(notification);
-  const title = String(notification.title || "SentryLoom").slice(0, 100);
+  const title = String(notification.title || "Endpointward").slice(0, 100);
   const message = String(notification.message || "").slice(0, 500);
   if (process.platform === "darwin") {
     const escaped = (value) => value.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
@@ -21,5 +21,5 @@ export function showDetectionNotification(notification) {
       "-e", `display notification "${escaped(message)}" with title "${escaped(title)}"`
     ]);
   }
-  return detached("notify-send", ["--app-name=SentryLoom", title, message]);
+  return detached("notify-send", ["--app-name=Endpointward", title, message]);
 }

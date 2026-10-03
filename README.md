@@ -1,10 +1,10 @@
-[![Hits](https://hits.sh/github.com/alivirgo/SentryLoom.svg)](https://hits.sh/github.com/alivirgo/SentryLoom/)
+[![Hits](https://hits.sh/github.com/alivirgo/Endpointward.svg)](https://hits.sh/github.com/alivirgo/Endpointward/)
 
 <p align="center">
-  <img src="assets/sentryloom-icon.png" width="112" alt="SentryLoom shield logo">
+  <img src="assets/endpointward-icon.png" width="112" alt="Endpointward shield logo">
 </p>
 
-<h1 align="center">SentryLoom</h1>
+<h1 align="center">Endpointward</h1>
 
 <p align="center">Current release: Endpoint <strong>0.17.0</strong> · HQ <strong>0.5.0</strong> · Android <strong>0.3.0</strong></p>
 
@@ -15,40 +15,40 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/alivirgo/SentryLoom/actions/workflows/test.yml"><img alt="Tests" src="https://github.com/alivirgo/SentryLoom/actions/workflows/test.yml/badge.svg"></a>
-  <a href="https://github.com/alivirgo/SentryLoom/actions/workflows/codeql.yml"><img alt="CodeQL" src="https://github.com/alivirgo/SentryLoom/actions/workflows/codeql.yml/badge.svg"></a>
+  <a href="https://github.com/alivirgo/Endpointward/actions/workflows/test.yml"><img alt="Tests" src="https://github.com/alivirgo/Endpointward/actions/workflows/test.yml/badge.svg"></a>
+  <a href="https://github.com/alivirgo/Endpointward/actions/workflows/codeql.yml"><img alt="CodeQL" src="https://github.com/alivirgo/Endpointward/actions/workflows/codeql.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="Apache 2.0 license" src="https://img.shields.io/badge/license-Apache--2.0-blue"></a>
   <img alt="Platforms" src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20Android-0078D4">
   <img alt="Node.js 24+" src="https://img.shields.io/badge/Node.js-24%2B-339933">
 </p>
 
-SentryLoom is a transparent endpoint-security and response
+Endpointward is a transparent endpoint-security and response
 (EDR) learning platform, local malware scanner, ransomware monitor, and
 self-hosted security operations console. It is designed for people, labs,
 small businesses, schools, security researchers, and organizations that want
 to understand and control where their endpoint telemetry goes.
 
 It works fully offline for local protection. Connecting an endpoint to
-SentryLoom HQ is optional, explicit, certificate-pinned, and self-hosted.
+Endpointward HQ is optional, explicit, certificate-pinned, and self-hosted.
 
 Management and operations resources:
 
-- [Management presentation](docs/management/SentryLoom-Management-Presentation.pptx)
-- [Complete endpoint and HQ user guide](docs/guides/SentryLoom-Complete-User-Guide.docx)
+- [Management presentation](docs/management/Endpointward-Management-Presentation.pptx)
+- [Complete endpoint and HQ user guide](docs/guides/Endpointward-Complete-User-Guide.docx)
 - [Connection resilience test plan](docs/CONNECTION-RESILIENCE.md)
 - [Linux, macOS, and Android clients](docs/CROSS-PLATFORM-CLIENTS.md)
 
 > [!IMPORTANT]
-> SentryLoom is an actively developed user-mode security project, not a
+> Endpointward is an actively developed user-mode security project, not a
 > certified replacement for the operating system's built-in security stack or
 > a mature commercial EDR. Keep platform protections enabled. Read
 > [SECURITY.md](SECURITY.md) before production deployment.
 
-## Why SentryLoom
+## Why Endpointward
 
 - **Local-first security:** scanning, quarantine, audit records, reputation
   lookup, and policy evaluation remain on the endpoint.
-- **No mandatory cloud:** standalone endpoints do not contact SentryLoom HQ.
+- **No mandatory cloud:** standalone endpoints do not contact Endpointward HQ.
 - **Auditable implementation:** the endpoint and server use dependency-light
   JavaScript, PowerShell, C#, HTML, and CSS instead of opaque agents.
 - **Conservative response:** confirmed signatures may be quarantined;
@@ -74,7 +74,7 @@ Management and operations resources:
   ransomware-canary, write-burst, security-event, removable-media, and
   firewall-integrity monitoring.
 - TCP connection metadata and Windows DNS-cache correlation with local network
-  indicators. SentryLoom does not decrypt TLS or inspect packet payloads.
+  indicators. Endpointward does not decrypt TLS or inspect packet payloads.
 - Opt-in high-confidence IP blocking through Windows Defender Firewall.
 
 ### Containment, integrity, and privacy
@@ -114,7 +114,7 @@ See [threat-intelligence source policy](docs/THREAT-INTELLIGENCE-SOURCES.md)
 for included sources, safety rules, and providers that cannot truthfully be
 described as free and unlimited.
 
-### SentryLoom HQ
+### Endpointward HQ
 
 - HTTPS management service with self-generated TLS and certificate pinning.
 - LAN discovery and administrator-approved endpoint enrollment.
@@ -152,7 +152,7 @@ flowchart LR
     Tray["Native C# launcher + tray status"] --> LocalAPI
   end
 
-  Engine -- "optional pinned HTTPS telemetry" --> HQAPI["SentryLoom HQ API"]
+  Engine -- "optional pinned HTTPS telemetry" --> HQAPI["Endpointward HQ API"]
   HQAPI --> HQDB["SQLite fleet state"]
   HQAPI --> HQUI["HQ HTML/CSS/JS console"]
   HQAPI -- "allowlisted commands only" --> Engine
@@ -186,7 +186,7 @@ The complete trust-boundary and data-flow discussion is in
 | HTML | `src/ui/index.html` | Accessible overview, scanning, quarantine, activity, policy, HQ, DNS, USB, and threat-intelligence views. |
 | CSS | `src/ui/styles.css` | Responsive dark/light interface without external UI frameworks. |
 | Browser JavaScript | `src/ui/app.js` | API calls, status rendering, scan controls, settings, alerts, output viewer, and reconnect UX. |
-| C# / WinForms | `launcher/SentryLoomLauncher.cs` | Windowless process launch, single-instance GUI restore, system-tray health icon, and bounded background output capture. |
+| C# / WinForms | `launcher/EndpointwardLauncher.cs` | Windowless process launch, single-instance GUI restore, system-tray health icon, and bounded background output capture. |
 | PowerShell | Root `*.ps1` files | Scheduled tasks, elevation boundaries, installer registration, DNS/USB helpers, updates, and clean removal. |
 
 ### HQ backend
@@ -236,8 +236,8 @@ The runtime intentionally has no npm package dependencies.
 ### Endpoint from source
 
 ```powershell
-git clone https://github.com/alivirgo/SentryLoom.git
-cd SentryLoom
+git clone https://github.com/alivirgo/Endpointward.git
+cd Endpointward
 npm test
 node .\src\cli.js dashboard
 ```
@@ -246,7 +246,7 @@ Register windowless resident protection, a daily quick scan, and a weekly idle
 full scan:
 
 ```powershell
-.\Register-SentryLoom.ps1 -SystemWideProtection
+.\Register-Endpointward.ps1 -SystemWideProtection
 ```
 
 The notification-area icon is green while HQ is reachable and red otherwise.
@@ -259,7 +259,7 @@ Run in an elevated PowerShell window:
 
 ```powershell
 cd .\server
-.\Initialize-SentryLoomHq.ps1 `
+.\Initialize-EndpointwardHq.ps1 `
   -PublicHost security-hq.example.local `
   -HqName "Security Operations" `
   -RegisterStartupTask
@@ -268,7 +268,7 @@ cd .\server
 Setup creates the TLS certificate, SQLite database, firewall rules, and
 self-restarting startup task. The packaged HQ installer asks the administrator
 to choose and confirm a password; source setup generates one unless
-`SENTRYLOOM_HQ_SETUP_ADMIN_PASSWORD` is supplied to the initialization process.
+`ENDPOINTWARD_HQ_SETUP_ADMIN_PASSWORD` is supplied to the initialization process.
 
 HQ administrators generate long one-time maintenance passwords from the
 **Rotating endpoint passwords** panel. Passwords are shown once, stored only as
@@ -278,10 +278,10 @@ administrator is online; that request expires after 20 seconds and its
 one-time password is RSA-encrypted for the requesting endpoint.
 
 The supported uninstaller requests that password before it unlocks the
-installation tree. For manual file maintenance, open **Authorize SentryLoom
+installation tree. For manual file maintenance, open **Authorize Endpointward
 File Maintenance** from the Start Menu, approve UAC, and enter a current
 maintenance password. Windows Explorer blocks direct deletion with an access
-denied message; Windows cannot replace that message with SentryLoom's password
+denied message; Windows cannot replace that message with Endpointward's password
 dialog without a signed filesystem minifilter driver.
 
 Setup upgrades preserve endpoint and HQ operational state. Before replacing
@@ -291,7 +291,7 @@ certificates, databases, updates, and policy metadata. Runtime configuration
 uses versioned schema migrations that retain existing values and add only new
 defaults unless a release explicitly documents a changed field.
 
-Endpoint state is shared machine-wide at `%ProgramData%\SentryLoom`. Setup
+Endpoint state is shared machine-wide at `%ProgramData%\Endpointward`. Setup
 migrates legacy per-user state from the installing administrator or active
 desktop user so the background agent, tray, and GUI keep one device identity
 and one HQ enrollment. Resident protection starts at Windows startup under the
@@ -312,19 +312,19 @@ and automatic deployment of trusted signed client updates.
 ### CLI
 
 ```text
-sentryloom dashboard [--no-open] [--port 3210]
-sentryloom quick|full|startup|processes|external [--json] [--no-quarantine]
-sentryloom scan <path> [--json] [--no-quarantine]
-sentryloom protect [path ...]
-sentryloom status [--json]
-sentryloom quarantine list|restore|delete
-sentryloom signatures status|trust|import
-sentryloom update [all|clamav|malwarebazaar|urlhaus|feodotracker|threatfox]
-sentryloom ioc lookup <ip-domain-url>
-sentryloom dns status|apply|restore
-sentryloom firewall status|clear
-sentryloom audit verify
-sentryloom hq discover|status|disconnect
+endpointward dashboard [--no-open] [--port 3210]
+endpointward quick|full|startup|processes|external [--json] [--no-quarantine]
+endpointward scan <path> [--json] [--no-quarantine]
+endpointward protect [path ...]
+endpointward status [--json]
+endpointward quarantine list|restore|delete
+endpointward signatures status|trust|import
+endpointward update [all|clamav|malwarebazaar|urlhaus|feodotracker|threatfox]
+endpointward ioc lookup <ip-domain-url>
+endpointward dns status|apply|restore
+endpointward firewall status|clear
+endpointward audit verify
+endpointward hq discover|status|disconnect
 ```
 
 Scan exit codes are `0` for clean, `1` for operational error, and `2` for a
@@ -372,7 +372,7 @@ Tests use temporary data directories and harmless industry test markers.
   [code signing policy](CODE_SIGNING_POLICY.md).
 - Do not upload real malware, quarantine objects, endpoint logs, credentials,
   certificates, personal files, or customer telemetry to public issues.
-- SentryLoom does not include an arbitrary remote shell and should not be
+- Endpointward does not include an arbitrary remote shell and should not be
   modified into one.
 - Community feed usage may be subject to provider-specific fair-use or
   commercial terms independent of the Apache 2.0 software license.
@@ -383,7 +383,7 @@ The chart below is updated daily by GitHub Actions from the GitHub API. It
 tracks repository stars and the number of current GitHub contributors over
 time without external analytics or embedded credentials.
 
-![SentryLoom GitHub stars and contributors over time](docs/community-metrics.svg)
+![Endpointward GitHub stars and contributors over time](docs/community-metrics.svg)
 
 Raw history is stored in
 [`docs/community-metrics.json`](docs/community-metrics.json), and the generator
@@ -404,14 +404,14 @@ response workflows.
 
 ## License
 
-Copyright 2026 NUC7 Studios and SentryLoom contributors.
+Copyright 2026 NUC7 Studios and Endpointward contributors.
 
 Licensed under the [Apache License 2.0](LICENSE). You may use, modify,
-distribute, host, and sell software based on SentryLoom under the license's
+distribute, host, and sell software based on Endpointward under the license's
 terms. The license includes an explicit patent grant. Product names and
 trademarks are not licensed beyond customary attribution.
 
 ---
 
-SentryLoom aims to make endpoint defense more local, understandable, and
+Endpointward aims to make endpoint defense more local, understandable, and
 collaborative—one carefully reviewed contribution at a time.

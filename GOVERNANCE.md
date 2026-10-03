@@ -1,6 +1,6 @@
 # Governance
 
-SentryLoom is currently a maintainer-led open-source project.
+Endpointward is currently a maintainer-led open-source project.
 
 ## Decision making
 

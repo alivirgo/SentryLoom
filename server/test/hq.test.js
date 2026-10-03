@@ -31,7 +31,7 @@ import { ThreatGateway } from "../src/threat-gateway.js";
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 test("HQ setup password updater hashes the chosen password without printing it", async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "sentryloom-hq-password-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "endpointward-hq-password-"));
   const configPath = path.join(root, "config.json");
   const password = "Chosen-Setup-Pässword-42!  ";
   await fs.writeFile(configPath, JSON.stringify({
@@ -54,7 +54,7 @@ test("HQ setup password updater hashes the chosen password without printing it",
       encoding: "utf8",
       env: {
         ...process.env,
-        SENTRYLOOM_HQ_SETUP_ADMIN_PASSWORD: password
+        ENDPOINTWARD_HQ_SETUP_ADMIN_PASSWORD: password
       }
     });
     assert.equal(result.status, 0, result.stderr);
@@ -73,7 +73,7 @@ test("HQ setup password updater hashes the chosen password without printing it",
       encoding: "utf8",
       env: {
         ...process.env,
-        SENTRYLOOM_HQ_SETUP_ADMIN_PASSWORD: password
+        ENDPOINTWARD_HQ_SETUP_ADMIN_PASSWORD: password
       }
     });
     assert.equal(verification.status, 0, verification.stderr);
@@ -143,7 +143,7 @@ test("HQ settings expose only discrete safe values and preserve secret admin fie
     maxLoginAttempts: 5,
     maintenanceMinutes: 30,
     maintenanceUses: 3,
-    stagingDirectory: "Z:\\Extreme Control\\SentryLoom Updates",
+    stagingDirectory: "Z:\\Extreme Control\\Endpointward Updates",
     autoDeploy: true,
     allowed: {
       retentionDays: [30, 90, 365],
@@ -157,12 +157,12 @@ test("HQ settings expose only discrete safe values and preserve secret admin fie
 });
 
 test("HQ publishes the highest signed staged client version atomically", async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "sentryloom-hq-staging-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "endpointward-hq-staging-"));
   const staging = path.join(root, "staging");
   const repository = path.join(root, "repository");
   await fs.mkdir(staging, { recursive: true });
-  await fs.writeFile(path.join(staging, "SentryLoom-Setup-1.9.9.exe"), Buffer.alloc(4096, 1));
-  await fs.writeFile(path.join(staging, "SentryLoom-Setup-2.0.0.exe"), Buffer.alloc(8192, 2));
+  await fs.writeFile(path.join(staging, "Endpointward-Setup-1.9.9.exe"), Buffer.alloc(4096, 1));
+  await fs.writeFile(path.join(staging, "Endpointward-Setup-2.0.0.exe"), Buffer.alloc(8192, 2));
   await fs.writeFile(path.join(staging, "notes.txt"), "ignored");
   try {
     const newest = await latestStagedSetup(staging);
@@ -178,7 +178,7 @@ test("HQ publishes the highest signed staged client version atomically", async (
       releaseNotes: "Automated staging test"
     });
     assert.equal(published.version, "2.0.0");
-    assert.equal(published.fileName, "SentryLoom-Setup-2.0.0.exe");
+    assert.equal(published.fileName, "Endpointward-Setup-2.0.0.exe");
     assert.equal(published.size, 8192);
     assert.equal((await service.latest()).sha256, published.sha256);
     assert.equal((await service.stagingStatus(staging)).latest.version, "2.0.0");
@@ -189,7 +189,7 @@ test("HQ publishes the highest signed staged client version atomically", async (
 });
 
 test("HQ protects the abuse.ch key at rest and never returns it through the gateway", async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "sentryloom-hq-secrets-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "endpointward-hq-secrets-"));
   const file = path.join(root, "hq-secrets.json");
   const authKey = "unit-test-server-auth-key-123456";
   const protect = async (value) => Buffer.from(value).reverse().toString("base64");
@@ -290,7 +290,7 @@ test("HQ UI exposes staged publishing, Wake-on-LAN, and verified re-enrollment",
 });
 
 test("completed offboarding revokes the server credential", async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "sentryloom-offboard-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "endpointward-offboard-"));
   const store = await new HqStore(path.join(root, "hq.sqlite")).open();
   try {
     const enrollment = store.enrollDevice({
@@ -316,7 +316,7 @@ test("completed offboarding revokes the server credential", async () => {
 });
 
 test("HQ enrolls, authenticates telemetry, and delivers allowlisted commands", async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "sentryloom-hq-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "endpointward-hq-"));
   const salt = crypto.randomBytes(16).toString("base64");
   const password = "Correct-Horse-HQ-Password";
   const config = {
@@ -339,7 +339,7 @@ test("HQ enrolls, authenticates telemetry, and delivers allowlisted commands", a
   };
   await fs.mkdir(config.updates.directory, { recursive: true });
   const updatePackage = Buffer.alloc(4096, 7);
-  const updateFileName = "SentryLoom-Setup-9.8.7.exe";
+  const updateFileName = "Endpointward-Setup-9.8.7.exe";
   await fs.writeFile(path.join(config.updates.directory, updateFileName), updatePackage);
   await fs.writeFile(path.join(config.updates.directory, "latest.json"), JSON.stringify({
     schemaVersion: 1,
@@ -385,7 +385,7 @@ test("HQ enrolls, authenticates telemetry, and delivers allowlisted commands", a
 
     const deviceHeaders = {
       "Content-Type": "application/json",
-      "X-SentryLoom-Device": enrollment.deviceId,
+      "X-Endpointward-Device": enrollment.deviceId,
       Authorization: `Bearer ${enrollment.token}`
     };
     const telemetryResponse = await fetch(`${origin}/api/v1/device/telemetry`, {
@@ -454,7 +454,7 @@ test("HQ enrolls, authenticates telemetry, and delivers allowlisted commands", a
     const adminHeaders = {
       Cookie: cookie,
       "Content-Type": "application/json",
-      "X-SentryLoom-CSRF": login.csrf
+      "X-Endpointward-CSRF": login.csrf
     };
 
     const settingsResponse = await fetch(`${origin}/api/admin/settings`, {
@@ -490,7 +490,7 @@ test("HQ enrolls, authenticates telemetry, and delivers allowlisted commands", a
     });
     assert.equal(generatedPasswordResponse.status, 201);
     const generatedPassword = await generatedPasswordResponse.json();
-    assert.match(generatedPassword.password, /^SL-[A-Za-z0-9_-]{32}$/);
+    assert.match(generatedPassword.password, /^EPWard-[A-Za-z0-9_-]{32}$/);
     const maintenanceCredentials = {
       serverUrl: origin,
       fingerprint256: "",
@@ -534,7 +534,7 @@ test("HQ enrolls, authenticates telemetry, and delivers allowlisted commands", a
     );
     assert.equal(approveMaintenanceResponse.status, 200);
     const requestedPassword = await requestedPasswordPromise;
-    assert.match(requestedPassword.password, /^SL-[A-Za-z0-9_-]{32}$/);
+    assert.match(requestedPassword.password, /^EPWard-[A-Za-z0-9_-]{32}$/);
     assert.equal((await authorizeHqMaintenance(
       maintenanceCredentials,
       requestedPassword.password,

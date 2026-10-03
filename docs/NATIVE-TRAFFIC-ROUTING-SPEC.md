@@ -46,4 +46,4 @@ Any future TLS inspection mode requires:
 - clear user disclosure and auditable activation;
 - independent penetration testing.
 
-SentryLoom 0.9.0 does not install a root certificate or claim whole-device traffic routing.
+Endpointward 0.9.0 does not install a root certificate or claim whole-device traffic routing.

@@ -30,10 +30,10 @@ export function validateClientUpdateManifest(value) {
     throw new Error("HQ returned an invalid client update size");
   }
   const fileName = path.basename(String(value.fileName || ""));
-  if (fileName !== value.fileName || !/^SentryLoom-Setup-\d+\.\d+\.\d+\.exe$/i.test(fileName)) {
+  if (fileName !== value.fileName || !/^Endpointward-Setup-\d+\.\d+\.\d+\.exe$/i.test(fileName)) {
     throw new Error("HQ returned an invalid client update package name");
   }
-  if (fileName.toLowerCase() !== `sentryloom-setup-${value.version}.exe`.toLowerCase()) {
+  if (fileName.toLowerCase() !== `endpointward-setup-${value.version}.exe`.toLowerCase()) {
     throw new Error("HQ update package name does not match its version");
   }
   const signerThumbprint = String(value.signerThumbprint || "").replace(/\s/g, "").toUpperCase();
@@ -71,8 +71,8 @@ async function resolvePowerShell() {
 async function verifyAuthenticode(file) {
   const shell = await resolvePowerShell();
   const script = [
-    "$signature=Get-AuthenticodeSignature -LiteralPath $env:SENTRYLOOM_UPDATE_FILE",
-    "$item=Get-Item -LiteralPath $env:SENTRYLOOM_UPDATE_FILE",
+    "$signature=Get-AuthenticodeSignature -LiteralPath $env:ENDPOINTWARD_UPDATE_FILE",
+    "$item=Get-Item -LiteralPath $env:ENDPOINTWARD_UPDATE_FILE",
     "[pscustomobject]@{Status=[string]$signature.Status;Thumbprint=[string]$signature.SignerCertificate.Thumbprint;Subject=[string]$signature.SignerCertificate.Subject;Version=[string]$item.VersionInfo.ProductVersion}|ConvertTo-Json -Compress"
   ].join(";");
   const output = await new Promise((resolve, reject) => {
@@ -80,7 +80,7 @@ async function verifyAuthenticode(file) {
       windowsHide: true,
       timeout: 30000,
       maxBuffer: 1024 * 1024,
-      env: { ...process.env, SENTRYLOOM_UPDATE_FILE: file }
+      env: { ...process.env, ENDPOINTWARD_UPDATE_FILE: file }
     }, (error, stdout, stderr) => error ? reject(new Error(stderr.trim() || error.message)) : resolve(stdout));
   });
   return JSON.parse(output);
@@ -115,7 +115,7 @@ export async function stageClientUpdate(credentials, options = {}) {
     return { state: "up-to-date", currentVersion: APP_VERSION, targetVersion: manifest.version };
   }
   if (!await elevated()) {
-    throw new Error("The elevated SentryLoom protection task must be running to install client updates");
+    throw new Error("The elevated Endpointward protection task must be running to install client updates");
   }
   const paths = appPaths();
   await ensureDirectory(paths.clientUpdates);
@@ -141,7 +141,7 @@ export async function stageClientUpdate(credentials, options = {}) {
       throw new Error("The client update failed Authenticode publisher or version verification");
     }
     const installRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-    const helper = path.join(installRoot, "Update-SentryLoom.ps1");
+    const helper = path.join(installRoot, "Update-Endpointward.ps1");
     await fs.access(helper);
     await writeJsonAtomic(paths.clientUpdateStatus, {
       state: "staged",

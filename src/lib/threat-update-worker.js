@@ -1,6 +1,6 @@
 import { parentPort, workerData } from "node:worker_threads";
 
-process.env.SENTRYLOOM_DATA_DIR = workerData.dataDirectory;
+process.env.ENDPOINTWARD_DATA_DIR = workerData.dataDirectory;
 
 const { updateThreatFeeds } = await import("./threat-updater.js");
 

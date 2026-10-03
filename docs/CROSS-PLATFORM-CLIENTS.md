@@ -25,26 +25,26 @@ The existing Node endpoint now selects Linux collectors for:
   network-interface inventory;
 - realtime file monitoring, scanning, encrypted quarantine, threat feeds,
   ransomware canaries, audit integrity, and HQ management;
-- opt-in high-confidence IOC blocks in a dedicated `inet sentryloom` nftables
+- opt-in high-confidence IOC blocks in a dedicated `inet endpointward` nftables
   table.
 
 Install from a release tree:
 
 ```text
 sudo bash installer/install-unix.sh
-sudo sentryloom dashboard
+sudo endpointward dashboard
 ```
 
 Node.js does not need to be preinstalled. The installer downloads and verifies
 an official private Node.js 24 runtime, installs Ubuntu collector packages with
 APT, and records every loaded command in
-`/opt/sentryloom/dependencies.txt`. See
+`/opt/endpointward/dependencies.txt`. See
 [`UNIX-DEPENDENCIES.md`](UNIX-DEPENDENCIES.md) for the exact package-to-feature
 mapping.
 
-The installer uses `/opt/sentryloom` for immutable program files,
-`/var/lib/sentryloom` for mutable state, `/usr/local/bin/sentryloom` for the
-CLI, and `sentryloom.service` for resident protection.
+The installer uses `/opt/endpointward` for immutable program files,
+`/var/lib/endpointward` for mutable state, `/usr/local/bin/endpointward` for the
+CLI, and `endpointward.service` for resident protection.
 
 Dependencies used when available are `ss`, `lsblk`, `systemctl`, `journalctl`,
 `nft`, `ufw`, `zenity`, and `notify-send`. Missing optional utilities degrade
@@ -68,8 +68,8 @@ The same Node endpoint selects macOS collectors for:
   realtime monitoring, and HQ management.
 
 `installer/install-unix.sh` creates
-`/Library/LaunchDaemons/org.sentryloom.endpoint.plist`. Grant Full Disk Access
-to the Node/SentryLoom executable if protected user data must be monitored.
+`/Library/LaunchDaemons/org.endpointward.endpoint.plist`. Grant Full Disk Access
+to the Node/Endpointward executable if protected user data must be monitored.
 macOS does not permit an unsigned user-mode application to claim kernel-level
 pre-execution protection or unrestricted device control.
 

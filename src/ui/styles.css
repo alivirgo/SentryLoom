@@ -49,7 +49,7 @@ html[data-theme="light"] {
 * { box-sizing: border-box; }
 html { background: var(--bg); }
 body { margin: 0; background: var(--bg); color: var(--text); min-height: 100vh; user-select: none; font-size: 14px; line-height: 1.45; }
-body.closing::after { content: "Closing SentryLoom…"; position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: rgba(11,15,20,.92); backdrop-filter: blur(10px); color: var(--text); font-size: 16px; font-weight: 600; }
+body.closing::after { content: "Closing Endpointward…"; position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: rgba(11,15,20,.92); backdrop-filter: blur(10px); color: var(--text); font-size: 16px; font-weight: 600; }
 button, input, textarea, select { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .55; }

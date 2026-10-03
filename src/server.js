@@ -81,7 +81,7 @@ export function createDashboardServer(engine, options = {}) {
         if (!supplied || supplied.length !== launchToken.length ||
             !crypto.timingSafeEqual(Buffer.from(supplied), Buffer.from(launchToken))) {
           response.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" });
-          response.end("Invalid SentryLoom launch token. Start the console from the SentryLoom shortcut.");
+          response.end("Invalid Endpointward launch token. Start the console from the Endpointward shortcut.");
           return;
         }
         const sessionId = crypto.randomBytes(24).toString("base64url");
@@ -89,22 +89,22 @@ export function createDashboardServer(engine, options = {}) {
         const requestedPage = validDashboardPage(url.searchParams.get("page"));
         response.writeHead(302, {
           Location: requestedPage ? `/?page=${encodeURIComponent(requestedPage)}` : "/",
-          "Set-Cookie": `sentryloom_session=${sessionId}; HttpOnly; SameSite=Strict; Path=/`,
+          "Set-Cookie": `endpointward_session=${sessionId}; HttpOnly; SameSite=Strict; Path=/`,
           "Cache-Control": "no-store"
         });
         response.end();
         return;
       }
 
-      const sessionId = cookieValue(request, "sentryloom_session");
+      const sessionId = cookieValue(request, "endpointward_session");
       const session = sessions.get(sessionId);
       if (!session) {
         response.writeHead(401, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
-        response.end("SentryLoom session required. Launch the console from the installed shortcut.");
+        response.end("Endpointward session required. Launch the console from the installed shortcut.");
         return;
       }
       if (url.pathname.startsWith("/api/")) {
-        if (request.method !== "GET" && request.headers["x-sentryloom-csrf"] !== session.csrf) {
+        if (request.method !== "GET" && request.headers["x-endpointward-csrf"] !== session.csrf) {
           json(response, 403, { error: "Request verification failed" });
           return;
         }
@@ -160,7 +160,7 @@ export function createDashboardServer(engine, options = {}) {
             json(response, 400, { error: "HQ certificate fingerprint is invalid" });
             return;
           }
-          const allowHttp = process.env.SENTRYLOOM_ALLOW_INSECURE_HQ === "1";
+          const allowHttp = process.env.ENDPOINTWARD_ALLOW_INSECURE_HQ === "1";
           const serverUrl = body.serverUrl?.trim()
             ? normalizeHqUrl(body.serverUrl, { allowHttp })
             : undefined;
@@ -195,7 +195,7 @@ export function createDashboardServer(engine, options = {}) {
             json(response, 400, { error: "The discovered HQ URL is required" });
             return;
           }
-          const allowHttp = process.env.SENTRYLOOM_ALLOW_INSECURE_HQ === "1";
+          const allowHttp = process.env.ENDPOINTWARD_ALLOW_INSECURE_HQ === "1";
           const serverUrl = normalizeHqUrl(body.serverUrl, { allowHttp });
           const current = await engine.getHqStatus();
           if (!current.enrolled) {

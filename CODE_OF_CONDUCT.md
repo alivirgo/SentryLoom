@@ -1,8 +1,8 @@
-# SentryLoom Code of Conduct
+# Endpointward Code of Conduct
 
 ## Our pledge
 
-We pledge to make participation in SentryLoom a harassment-free experience for
+We pledge to make participation in Endpointward a harassment-free experience for
 everyone, regardless of age, body size, disability, ethnicity, sex
 characteristics, gender identity and expression, level of experience,
 education, socioeconomic status, nationality, personal appearance, race,

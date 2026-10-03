@@ -58,7 +58,7 @@ export async function usbStorageStatus() {
 }
 
 async function runUsbHelper(action) {
-  const script = fileURLToPath(new URL("../../Set-SentryLoomUsbStorage.ps1", import.meta.url));
+  const script = fileURLToPath(new URL("../../Set-EndpointwardUsbStorage.ps1", import.meta.url));
   const args = [
     "-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
     "-File", script, "-Action", action, "-BackupPath", appPaths().usbPolicyBackup

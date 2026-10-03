@@ -256,9 +256,9 @@ export class AdvancedMonitoring {
   }
 
   async initializeCanaries() {
-    const marker = "SentryLoom ransomware behavior canary. Changes to this file trigger a security alert.\n";
+    const marker = "Endpointward ransomware behavior canary. Changes to this file trigger a security alert.\n";
     for (const directory of this.canaryTargets()) {
-      const file = path.join(directory, ".sentryloom-ransomware-canary.txt");
+      const file = path.join(directory, ".endpointward-ransomware-canary.txt");
       try {
         if (!fs.existsSync(file)) await fsp.writeFile(file, marker, { encoding: "utf8", flag: "wx", mode: 0o444 });
         const expected = crypto.createHash("sha256").update(await fsp.readFile(file)).digest("hex");

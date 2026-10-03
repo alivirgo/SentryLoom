@@ -74,7 +74,7 @@ export async function listDnsAdapters() {
 }
 
 async function runDnsHelper(action, profileId) {
-  const script = fileURLToPath(new URL("../../Set-SentryLoomDns.ps1", import.meta.url));
+  const script = fileURLToPath(new URL("../../Set-EndpointwardDns.ps1", import.meta.url));
   const args = [
     "-NoLogo",
     "-NoProfile",

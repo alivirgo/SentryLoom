@@ -13,7 +13,7 @@ let hqMaintenanceCompatibility = "standalone";
 let currentHqServerUrl = "";
 let stagedMaintenancePassword = "";
 
-const savedTheme = localStorage.getItem("sentryloom-theme");
+const savedTheme = localStorage.getItem("endpointward-theme");
 document.documentElement.dataset.theme = savedTheme === "light" ? "light" : "dark";
 
 const $ = (selector) => document.querySelector(selector);
@@ -58,7 +58,7 @@ function toast(message, error = false) {
 async function api(path, options = {}) {
   const headers = { ...(options.headers || {}) };
   if (options.body) headers["Content-Type"] = "application/json";
-  if (options.method && options.method !== "GET") headers["X-SentryLoom-CSRF"] = csrf;
+  if (options.method && options.method !== "GET") headers["X-Endpointward-CSRF"] = csrf;
   const response = await fetch(path, { ...options, headers });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
@@ -126,7 +126,7 @@ function renderStatus(status) {
   const networkReady = !status.protection.network.enabled || status.protection.network.running;
   const advancedReady = status.protection.advanced.running;
   const protectedNow = status.healthy && fileReady && networkReady && advancedReady;
-  $("#health-title").textContent = protectedNow ? "SentryLoom protection is active" : "Protection needs attention";
+  $("#health-title").textContent = protectedNow ? "Endpointward protection is active" : "Protection needs attention";
   $("#health-detail").textContent = protectedNow
     ? `${status.protection.file.targets.length} fixed-drive watcher(s) and TCP/DNS IOC monitoring are active${status.protection.elevated ? " with administrator access." : " with current-user access."}`
     : status.audit.valid ? "One or more configured realtime monitors are not currently active." : "Audit log integrity validation failed.";
@@ -236,13 +236,13 @@ function renderHq(status) {
   $("#hq-state").textContent = state;
   $("#hq-state").classList.toggle("warning", pending || verificationFailed || rejected || (enrolled && !connected && !status.delegated));
   $("#hq-summary").textContent = pending
-    ? `${status.hqName || "SentryLoom HQ"} · Ask the HQ administrator to contact you for this one-time code: ${status.verificationCode || "unavailable"}${status.lastCheckedAt ? ` · Checked ${relativeTime(status.lastCheckedAt)}` : ""}${status.lastError ? ` · ${status.lastError}` : ""}`
+    ? `${status.hqName || "Endpointward HQ"} · Ask the HQ administrator to contact you for this one-time code: ${status.verificationCode || "unavailable"}${status.lastCheckedAt ? ` · Checked ${relativeTime(status.lastCheckedAt)}` : ""}${status.lastError ? ` · ${status.lastError}` : ""}`
     : verificationFailed
       ? status.lastError || "The HQ approval did not prove knowledge of this client's code. Submit a new request."
       : rejected
-      ? `${status.hqName || "SentryLoom HQ"} rejected this enrollment request. Submit a new request or return to standalone mode.`
+      ? `${status.hqName || "Endpointward HQ"} rejected this enrollment request. Submit a new request or return to standalone mode.`
       : enrolled
-    ? `${status.hqName || "SentryLoom HQ"} · ${status.serverUrl || "server unavailable"}${status.delegated ? " · Managed by the background protection agent" : ""}${status.lastConnectedAt ? ` · Last contact ${relativeTime(status.lastConnectedAt)}` : ""}${status.lastResumeAt ? ` · Resumed ${relativeTime(status.lastResumeAt)}` : ""}${status.lastError ? ` · ${status.lastError}` : ""}${status.nextRetryAt ? ` · Retry ${relativeTime(status.nextRetryAt)}` : ""}`
+    ? `${status.hqName || "Endpointward HQ"} · ${status.serverUrl || "server unavailable"}${status.delegated ? " · Managed by the background protection agent" : ""}${status.lastConnectedAt ? ` · Last contact ${relativeTime(status.lastConnectedAt)}` : ""}${status.lastResumeAt ? ` · Resumed ${relativeTime(status.lastResumeAt)}` : ""}${status.lastError ? ` · ${status.lastError}` : ""}${status.nextRetryAt ? ` · Retry ${relativeTime(status.nextRetryAt)}` : ""}`
     : "This endpoint is locally managed and does not send telemetry to a server.";
   $("#disconnect-hq").classList.toggle("hidden", !enrolled && !pending && !verificationFailed && !rejected);
   $("#enroll-hq").classList.remove("hidden");
@@ -312,7 +312,7 @@ function renderSettingAuthorization(status) {
     },
     checking: {
       title: "HQ did not advertise capability metadata",
-      detail: "Protected changes remain available with a maintenance password; SentryLoom will verify support when the action is submitted.",
+      detail: "Protected changes remain available with a maintenance password; Endpointward will verify support when the action is submitted.",
       badge: "HQ password required · support verified on use",
       badgeClass: "",
       summaryClass: "warning"
@@ -537,7 +537,7 @@ function renderSettings(config) {
   $("#setting-removable-monitor").checked = config.monitoring.removableMediaEnabled;
   $("#setting-firewall-monitor").checked = config.monitoring.firewallIntegrityEnabled;
   $("#setting-firewall-block").checked = config.monitoring.firewallBlockHighConfidence;
-  $("#clear-firewall-rules").textContent = `Clear SentryLoom firewall blocks (${dashboard.firewallPolicy?.blockedAddresses || 0})`;
+  $("#clear-firewall-rules").textContent = `Clear Endpointward firewall blocks (${dashboard.firewallPolicy?.blockedAddresses || 0})`;
 }
 
 function renderDnsFiltering(status) {
@@ -609,12 +609,12 @@ function renderThreatIntel(status) {
   const credentialState = $("#abuse-auth-key-state");
   credentialState.textContent = managed
     ? gatewayConfigured
-      ? "abuse.ch Auth-Key is added and maintained by SentryLoom HQ. The key is never sent to or stored on this client."
+      ? "abuse.ch Auth-Key is added and maintained by Endpointward HQ. The key is never sent to or stored on this client."
       : "Waiting for an HQ administrator to add the abuse.ch Auth-Key on the server."
     : "Standalone key storage is local and authenticated-encrypted. Managed endpoints use the HQ gateway instead.";
   $("#abuse-auth-key").disabled = managed;
   $("#abuse-auth-key").placeholder = managed
-    ? gatewayConfigured ? "Managed securely by SentryLoom HQ" : "Configure the key in SentryLoom HQ"
+    ? gatewayConfigured ? "Managed securely by Endpointward HQ" : "Configure the key in Endpointward HQ"
     : "Paste your free Auth-Key";
   $("#save-auth-key").disabled = managed || running;
   $$(".feed-update, #update-all-feeds").forEach((button) => { button.disabled = running; });
@@ -646,7 +646,7 @@ async function refresh(full = false) {
     } else {
       renderStatus(await api("/api/status"));
     }
-    if (!dashboardReachable) toast("Local SentryLoom service connection restored");
+    if (!dashboardReachable) toast("Local Endpointward service connection restored");
     dashboardReachable = true;
   } catch (error) {
     if (dashboardReachable) toast(error.message, true);
@@ -694,7 +694,7 @@ $("#cancel-scan").addEventListener("click", async () => {
   try { await api("/api/scans/cancel", { method: "POST" }); toast("Scan cancellation requested"); } catch (error) { toast(error.message, true); }
 });
 $("#fix-all").addEventListener("click", async () => {
-  if (!confirm("Enable recommended protection controls and restart SentryLoom monitoring components? Aggressive heuristic quarantine and automatic firewall blocking will remain disabled.")) return;
+  if (!confirm("Enable recommended protection controls and restart Endpointward monitoring components? Aggressive heuristic quarantine and automatic firewall blocking will remain disabled.")) return;
   const button = $("#fix-all");
   const originalText = button.textContent;
   button.disabled = true;
@@ -715,7 +715,7 @@ $("#refresh").addEventListener("click", () => refresh(true));
 $("#theme-toggle").addEventListener("click", () => {
   const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
   document.documentElement.dataset.theme = next;
-  localStorage.setItem("sentryloom-theme", next);
+  localStorage.setItem("endpointward-theme", next);
   syncThemeButton();
 });
 $("#lookup-reputation").addEventListener("click", async () => {
@@ -761,7 +761,7 @@ $("#load-background-output").addEventListener("click", async () => {
   }
 });
 $("#exit-app").addEventListener("click", async () => {
-  if (!confirm("Close the SentryLoom console? Resident scheduled protection will continue in the background.")) return;
+  if (!confirm("Close the Endpointward console? Resident scheduled protection will continue in the background.")) return;
   const button = $("#exit-app");
   button.disabled = true;
   document.body.classList.add("closing");
@@ -803,7 +803,7 @@ $("#save-settings").addEventListener("click", async () => {
   try {
     dashboard.config = await api("/api/config", { method: "PATCH", body: JSON.stringify(body) });
     clearMaintenancePassword();
-    toast("Protection policy saved. Restart SentryLoom to apply realtime monitoring changes.");
+    toast("Protection policy saved. Restart Endpointward to apply realtime monitoring changes.");
   } catch (error) { toast(error.message, true); }
 });
 $("#submit-maintenance-password").addEventListener("click", () => {
@@ -877,7 +877,7 @@ $("#discover-hq").addEventListener("click", async () => {
       : discoveredOptions;
     select.classList.toggle("hidden", !discoveredHqServers.length);
     if (!discoveredHqServers.length) {
-      toast("No SentryLoom HQ server answered on this network", true);
+      toast("No Endpointward HQ server answered on this network", true);
       return;
     }
     if (hqEnrolled) {
@@ -1044,7 +1044,7 @@ $("#disconnect-hq").addEventListener("click", async () => {
 });
 $("#clear-firewall-rules").addEventListener("click", async () => {
   if (!protectedSettingPreflight()) return;
-  if (!confirm("Remove every outbound threat-IP rule created by SentryLoom?")) return;
+  if (!confirm("Remove every outbound threat-IP rule created by Endpointward?")) return;
   try {
     const status = await api("/api/firewall-policy/clear", {
       method: "POST",
@@ -1052,8 +1052,8 @@ $("#clear-firewall-rules").addEventListener("click", async () => {
     });
     clearMaintenancePassword();
     dashboard.firewallPolicy = status;
-    $("#clear-firewall-rules").textContent = `Clear SentryLoom firewall blocks (${status.blockedAddresses || 0})`;
-    toast("SentryLoom firewall rules cleared");
+    $("#clear-firewall-rules").textContent = `Clear Endpointward firewall blocks (${status.blockedAddresses || 0})`;
+    toast("Endpointward firewall rules cleared");
   } catch (error) { toast(error.message, true); }
 });
 $("#setting-usb-storage-block").addEventListener("change", async () => {
@@ -1065,7 +1065,7 @@ $("#setting-usb-storage-block").addEventListener("change", async () => {
   }
   const message = requested
     ? "Block access to USB and other removable storage classes on this PC? USB keyboards and mice will remain available."
-    : "Restore the removable-storage policy that existed before SentryLoom enabled blocking?";
+    : "Restore the removable-storage policy that existed before Endpointward enabled blocking?";
   if (!confirm(message)) {
     control.checked = !requested;
     return;
@@ -1117,7 +1117,7 @@ $("#apply-dns-profile").addEventListener("click", async () => {
 });
 $("#restore-dns-profile").addEventListener("click", async () => {
   if (!protectedSettingPreflight()) return;
-  if (!confirm("Restore the DNS settings saved before SentryLoom made its first change?")) return;
+  if (!confirm("Restore the DNS settings saved before Endpointward made its first change?")) return;
   const button = $("#restore-dns-profile");
   button.disabled = true;
   try {
@@ -1210,7 +1210,7 @@ window.addEventListener("offline", () => {
   toast("Windows reports that the network is offline. HQ reconnection will be automatic.", true);
 });
 window.addEventListener("online", () => {
-  toast("Network restored. Checking SentryLoom HQ now.");
+  toast("Network restored. Checking Endpointward HQ now.");
   refresh(false);
 });
 document.addEventListener("visibilitychange", () => {

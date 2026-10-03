@@ -55,7 +55,7 @@ below.
 | Ransomware process containment | Not implemented | Signals are report-only; suspension requires reliable process attribution |
 | Archive/Office deep parsing | Not implemented | Needs sandboxed parsers and fuzzing |
 | Malware reputation/intelligence | Not implemented | Offline curated feed required |
-| Enterprise fleet console | Implemented (initial) | Optional on-premises SentryLoom HQ; standalone mode remains fully supported |
+| Enterprise fleet console | Implemented (initial) | Optional on-premises Endpointward HQ; standalone mode remains fully supported |
 | Independent certification | Not completed | Requires external labs and operational maturity |
 | Linux service and telemetry | Implemented | systemd service; process, persistence, journal, removable media, firewall, TCP, hardware, storage, and network inventory |
 | macOS service and telemetry | Implemented | launchd service; process, LaunchAgent/Daemon, unified log, removable media, firewall, TCP, code-signing, hardware, and storage inventory |

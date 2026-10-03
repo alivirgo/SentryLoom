@@ -9,7 +9,7 @@ function digest(value) {
 
 function enrollmentVerificationProof(code, requestId, challenge) {
   return crypto.createHmac("sha256", String(code))
-    .update(`sentryloom-enrollment-v1\0${requestId}\0${challenge}`, "utf8")
+    .update(`endpointward-enrollment-v1\0${requestId}\0${challenge}`, "utf8")
     .digest("base64url");
 }
 

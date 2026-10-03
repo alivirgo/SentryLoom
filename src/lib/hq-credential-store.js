@@ -45,13 +45,13 @@ export async function saveHqCredentials(credentials) {
   const clean = {
     serverUrl: String(credentials.serverUrl),
     fingerprint256: String(credentials.fingerprint256 || ""),
-    hqName: String(credentials.hqName || "SentryLoom HQ"),
+    hqName: String(credentials.hqName || "Endpointward HQ"),
     deviceId: String(credentials.deviceId),
     token: String(credentials.token),
     enrolledAt: String(credentials.enrolledAt || new Date().toISOString())
   };
-  if (!/^https:\/\//i.test(clean.serverUrl) && process.env.SENTRYLOOM_ALLOW_INSECURE_HQ !== "1") {
-    throw new Error("SentryLoom HQ must use HTTPS");
+  if (!/^https:\/\//i.test(clean.serverUrl) && process.env.ENDPOINTWARD_ALLOW_INSECURE_HQ !== "1") {
+    throw new Error("Endpointward HQ must use HTTPS");
   }
   if (!/^[a-f0-9-]{36}$/i.test(clean.deviceId) || clean.token.length < 40) {
     throw new Error("HQ enrollment credentials are invalid");
@@ -71,7 +71,7 @@ export async function savePendingHqEnrollment(pending) {
   const clean = {
     serverUrl: String(pending.serverUrl),
     fingerprint256: String(pending.fingerprint256),
-    hqName: String(pending.hqName || "SentryLoom HQ"),
+    hqName: String(pending.hqName || "Endpointward HQ"),
     requestId: String(pending.requestId),
     requestSecret: String(pending.requestSecret),
     requestedAt: String(pending.requestedAt || new Date().toISOString()),

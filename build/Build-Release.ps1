@@ -22,11 +22,11 @@ $HqPackage = Get-Content -LiteralPath (Join-Path $Root 'server\package.json') -R
 $Version = [string]$Package.version
 $HqVersion = [string]$HqPackage.version
 $Output = Join-Path $Root 'build\output'
-$Launcher = Join-Path $Output 'SentryLoom.exe'
-$Setup = Join-Path $Root "dist\SentryLoom-Setup-$Version.exe"
-$HqSetup = Join-Path $Root "dist\SentryLoom-HQ-Setup-$HqVersion.exe"
-$Source = Join-Path $Root 'launcher\SentryLoomLauncher.cs'
-$Icon = Join-Path $Root 'assets\SentryLoom.ico'
+$Launcher = Join-Path $Output 'Endpointward.exe'
+$Setup = Join-Path $Root "dist\Endpointward-Setup-$Version.exe"
+$HqSetup = Join-Path $Root "dist\Endpointward-HQ-Setup-$HqVersion.exe"
+$Source = Join-Path $Root 'launcher\EndpointwardLauncher.cs'
+$Icon = Join-Path $Root 'assets\Endpointward.ico'
 $Compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 $InnoCompiler = Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe'
 
@@ -90,9 +90,9 @@ if ($PSCmdlet.ParameterSetName -ne 'Unsigned') {
     Invoke-ReleaseSignature $Launcher
 }
 
-& $InnoCompiler (Join-Path $Root 'installer\SentryLoom.iss')
+& $InnoCompiler (Join-Path $Root 'installer\Endpointward.iss')
 if ($LASTEXITCODE -ne 0) { throw 'Client installer compilation failed.' }
-& $InnoCompiler (Join-Path $Root 'installer\SentryLoomHq.iss')
+& $InnoCompiler (Join-Path $Root 'installer\EndpointwardHq.iss')
 if ($LASTEXITCODE -ne 0) { throw 'HQ server installer compilation failed.' }
 
 if ($PSCmdlet.ParameterSetName -ne 'Unsigned') {

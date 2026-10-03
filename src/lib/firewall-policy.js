@@ -6,7 +6,7 @@ import { appendAudit } from "./audit-log.js";
 import { isProcessElevated, runPowerShell } from "./windows-monitoring.js";
 import { execFile } from "node:child_process";
 
-const GROUP = "SentryLoom - Threat Intelligence";
+const GROUP = "Endpointward - Threat Intelligence";
 
 function psLiteral(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
@@ -27,11 +27,11 @@ function run(command, args, timeout = 30000) {
 }
 
 async function ensureLinuxTable() {
-  await run("nft", ["add", "table", "inet", "sentryloom"]).catch((error) => {
+  await run("nft", ["add", "table", "inet", "endpointward"]).catch((error) => {
     if (!/file exists/i.test(error.message)) throw error;
   });
   await run("nft", [
-    "add", "chain", "inet", "sentryloom", "output",
+    "add", "chain", "inet", "endpointward", "output",
     "{", "type", "filter", "hook", "output", "priority", "0", ";", "policy", "accept", ";", "}"
   ]).catch((error) => {
     if (!/file exists/i.test(error.message)) throw error;
@@ -44,12 +44,12 @@ export async function blockThreatIp(address, matches = []) {
     return { blocked: false, reason: "administrator access required" };
   }
   const hash = crypto.createHash("sha256").update(address).digest("hex").slice(0, 20);
-  const name = `SentryLoom-IOC-${hash}`;
-  const description = `SentryLoom threat-intelligence block for ${address}`.slice(0, 250);
+  const name = `Endpointward-IOC-${hash}`;
+  const description = `Endpointward threat-intelligence block for ${address}`.slice(0, 250);
   if (process.platform === "linux") {
     await ensureLinuxTable();
     await run("nft", [
-      "add", "rule", "inet", "sentryloom", "output",
+      "add", "rule", "inet", "endpointward", "output",
       isIP(address) === 6 ? "ip6" : "ip", "daddr", address,
       "counter", "drop", "comment", name
     ]).catch((error) => {
@@ -68,7 +68,7 @@ export async function blockThreatIp(address, matches = []) {
   const command = [
     `$existing = Get-NetFirewallRule -Name ${psLiteral(name)} -ErrorAction SilentlyContinue;`,
     "if (-not $existing) {",
-    ` New-NetFirewallRule -Name ${psLiteral(name)} -DisplayName ${psLiteral(`SentryLoom blocked ${address}`)}`,
+    ` New-NetFirewallRule -Name ${psLiteral(name)} -DisplayName ${psLiteral(`Endpointward blocked ${address}`)}`,
     ` -Description ${psLiteral(description)} -Group ${psLiteral(GROUP)} -Direction Outbound -Action Block`,
     ` -RemoteAddress ${psLiteral(address)} -Profile Any -Enabled True | Out-Null`,
     "}"
@@ -84,13 +84,13 @@ export async function blockThreatIp(address, matches = []) {
 
 export async function firewallPolicyStatus() {
   if (process.platform === "linux") {
-    const output = await run("nft", ["-j", "list", "table", "inet", "sentryloom"]).catch(() => "");
+    const output = await run("nft", ["-j", "list", "table", "inet", "endpointward"]).catch(() => "");
     if (!output) return { supported: true, blockedAddresses: 0, rules: [], implementation: "nftables" };
     try {
       const rules = (JSON.parse(output).nftables || [])
         .filter((item) => item.rule)
         .map((item) => item.rule)
-        .filter((rule) => String(rule.comment || "").startsWith("SentryLoom-IOC-"));
+        .filter((rule) => String(rule.comment || "").startsWith("Endpointward-IOC-"));
       return { supported: true, blockedAddresses: rules.length, rules, implementation: "nftables" };
     } catch {
       return { supported: true, blockedAddresses: 0, rules: [], implementation: "nftables" };
@@ -114,14 +114,14 @@ export async function firewallPolicyStatus() {
 export async function clearThreatFirewallRules() {
   if (process.platform === "linux") {
     if (!await isProcessElevated()) throw new Error("administrator access is required");
-    await run("nft", ["delete", "table", "inet", "sentryloom"]).catch((error) => {
+    await run("nft", ["delete", "table", "inet", "endpointward"]).catch((error) => {
       if (!/no such file|not found/i.test(error.message)) throw error;
     });
     await appendAudit("firewall.ioc-rules-cleared");
     return firewallPolicyStatus();
   }
   if (process.platform !== "win32") {
-    throw new Error("SentryLoom firewall IOC rules are not supported on this platform");
+    throw new Error("Endpointward firewall IOC rules are not supported on this platform");
   }
   const removal = `$rules = @(Get-NetFirewallRule -Group ${psLiteral(GROUP)} -ErrorAction SilentlyContinue); if ($rules.Count) { $rules | Remove-NetFirewallRule -ErrorAction Stop }`;
   if (await isProcessElevated()) {

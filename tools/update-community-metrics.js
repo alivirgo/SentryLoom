@@ -6,14 +6,14 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const historyFile = path.join(root, "docs", "community-metrics.json");
 const chartFile = path.join(root, "docs", "community-metrics.svg");
-const repository = process.env.GITHUB_REPOSITORY || "alivirgo/SentryLoom";
+const repository = process.env.GITHUB_REPOSITORY || "alivirgo/Endpointward";
 const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN || "";
 
 async function github(route) {
   const response = await fetch(`https://api.github.com${route}`, {
     headers: {
       Accept: "application/vnd.github+json",
-      "User-Agent": "SentryLoom-community-metrics",
+      "User-Agent": "Endpointward-community-metrics",
       "X-GitHub-Api-Version": "2022-11-28",
       ...(token ? { Authorization: `Bearer ${token}` } : {})
     }
@@ -72,7 +72,7 @@ function render(samples) {
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-labelledby="title desc">
-  <title id="title">SentryLoom GitHub community growth</title>
+  <title id="title">Endpointward GitHub community growth</title>
   <desc id="desc">Time-series lines for GitHub stars and current contributors. Latest values: ${latest.stars} stars and ${latest.contributors} contributors.</desc>
   <style>
     .background{fill:#0d1117}.plot{fill:#161b22;stroke:#30363d}.grid{stroke:#30363d;stroke-width:1}.axis{stroke:#8b949e;stroke-width:1.2}
@@ -83,7 +83,7 @@ function render(samples) {
     .star-dot{fill:#f2cc60}.contributor-dot{fill:#2f81f7}
   </style>
   <rect width="100%" height="100%" rx="12" class="background"/>
-  <text x="${left}" y="30" class="title">SentryLoom community growth</text>
+  <text x="${left}" y="30" class="title">Endpointward community growth</text>
   <text x="${width - right}" y="30" text-anchor="end" class="subtitle">Updated ${escapeXml(latest.date)}</text>
   <rect x="${left}" y="${top}" width="${plotWidth}" height="${plotHeight}" rx="6" class="plot"/>
   ${yTicks}

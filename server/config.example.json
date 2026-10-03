@@ -1,12 +1,12 @@
 {
   "schemaVersion": 4,
-  "hqName": "SentryLoom HQ",
+  "hqName": "Endpointward HQ",
   "host": "0.0.0.0",
   "port": 8443,
   "publicHost": "security-hq.example.local",
-  "databasePath": "data/sentryloom-hq.sqlite",
+  "databasePath": "data/endpointward-hq.sqlite",
   "tls": {
-    "pfxPath": "data/sentryloom-hq.pfx",
+    "pfxPath": "data/endpointward-hq.pfx",
     "password": "set-during-initialization",
     "fingerprint256": "SHA256-FINGERPRINT-WITHOUT-COLONS"
   },
@@ -34,7 +34,7 @@
   },
   "updates": {
     "directory": "updates",
-    "stagingDirectory": "Z:\\Extreme Control\\SentryLoom Updates",
+    "stagingDirectory": "Z:\\Extreme Control\\Endpointward Updates",
     "autoDeploy": false
   }
 }

@@ -1,15 +1,15 @@
 cff-version: 1.2.0
-message: "If SentryLoom supports your research or teaching, please cite the project."
-title: "SentryLoom: Local-first Windows endpoint security and on-premises fleet management"
+message: "If Endpointward supports your research or teaching, please cite the project."
+title: "Endpointward: Local-first Windows endpoint security and on-premises fleet management"
 type: software
 authors:
   - family-names: "Contributors"
-    given-names: "SentryLoom"
+    given-names: "Endpointward"
 version: 0.17.0
 date-released: 2026-09-03
 license: Apache-2.0
-repository-code: "https://github.com/alivirgo/SentryLoom"
-url: "https://github.com/alivirgo/SentryLoom"
+repository-code: "https://github.com/alivirgo/Endpointward"
+url: "https://github.com/alivirgo/Endpointward"
 keywords:
   - antivirus
   - endpoint security

@@ -1,4 +1,4 @@
-# Contributing to SentryLoom
+# Contributing to Endpointward
 
 Thank you for helping build understandable, local-first endpoint security.
 Contributions are welcome from developers, defenders, malware researchers,
@@ -22,8 +22,8 @@ Requirements:
 - PowerShell 5.1 or 7
 
 ```powershell
-git clone https://github.com/alivirgo/SentryLoom.git
-cd SentryLoom
+git clone https://github.com/alivirgo/Endpointward.git
+cd Endpointward
 npm test
 ```
 
@@ -60,7 +60,7 @@ There are no runtime npm dependencies.
 Use harmless industry test markers or synthetic fixtures. Do not commit,
 download, generate, or execute real malware as part of the test suite.
 
-Tests should isolate data with `SENTRYLOOM_DATA_DIR`, clean up temporary files,
+Tests should isolate data with `ENDPOINTWARD_DATA_DIR`, clean up temporary files,
 avoid internet access, and produce deterministic results.
 
 ## Licensing of contributions

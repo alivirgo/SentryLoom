@@ -426,7 +426,7 @@ export async function updateThreatFeeds(options) {
         if (FEED_SOURCES[source].requiresAuth &&
             !options.credentials?.abuseChAuthKey &&
             !options.hqCredentials) {
-          throw new Error("An abuse.ch Auth-Key is required locally or through SentryLoom HQ");
+          throw new Error("An abuse.ch Auth-Key is required locally or through Endpointward HQ");
         }
         enforceInterval(writer, source, options.config.minimumUpdateIntervalMinutes, options.force);
         writer.status(source, { state: "updating", lastAttempt: startedAt, error: null });

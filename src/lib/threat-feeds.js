@@ -136,7 +136,7 @@ export async function downloadFeedFile(url, destination, policy) {
   try {
     const response = await fetchPolicy(url, {
       method: "GET",
-      headers: { "User-Agent": `SentryLoom/${APP_VERSION}` },
+      headers: { "User-Agent": `Endpointward/${APP_VERSION}` },
       signal: controller.signal
     }, policy.allowedHosts, policy.fetchImpl);
     if (!response.ok || !response.body) throw new Error(`Feed returned HTTP ${response.status}`);
@@ -730,7 +730,7 @@ export async function extractTarTextFiles(file, requestedNames, maximumBytes = 3
 export async function fetchSpamhausDrop(config, fetchImpl) {
   const options = {
     method: "GET",
-    headers: { "User-Agent": `SentryLoom/${APP_VERSION}` },
+    headers: { "User-Agent": `Endpointward/${APP_VERSION}` },
     signal: AbortSignal.timeout(config.requestTimeoutMs)
   };
   const policy = {
@@ -764,7 +764,7 @@ export async function fetchMispOsint(
   const policy = { allowedHosts: SOURCE_HOSTS[source], maxBytes: 20 * 1024 * 1024, fetchImpl };
   const get = (url) => fetchJsonFeed(url, {
     method: "GET",
-    headers: { "User-Agent": `SentryLoom/${APP_VERSION}` },
+    headers: { "User-Agent": `Endpointward/${APP_VERSION}` },
     signal: AbortSignal.timeout(config.requestTimeoutMs)
   }, policy);
   const manifest = await get(`${base}manifest.json`);
@@ -906,7 +906,7 @@ export async function exportWindowsTrustedRoots(destination) {
     "  [void]$builder.AppendLine([Convert]::ToBase64String($cert.RawData, [Base64FormattingOptions]::InsertLineBreaks))",
     "  [void]$builder.AppendLine('-----END CERTIFICATE-----')",
     "}",
-    "[IO.File]::WriteAllText($env:SENTRYLOOM_CA_BUNDLE_PATH, $builder.ToString(), (New-Object Text.UTF8Encoding($false)))",
+    "[IO.File]::WriteAllText($env:ENDPOINTWARD_CA_BUNDLE_PATH, $builder.ToString(), (New-Object Text.UTF8Encoding($false)))",
     "[Console]::Out.Write($certs.Count)"
   ].join("; ");
   const result = await runProcess(powershell, [
@@ -921,7 +921,7 @@ export async function exportWindowsTrustedRoots(destination) {
     script
   ], 30000, {
     ...process.env,
-    SENTRYLOOM_CA_BUNDLE_PATH: destination
+    ENDPOINTWARD_CA_BUNDLE_PATH: destination
   });
   const count = Number(result.trim());
   if (!Number.isInteger(count) || count < 1) {
@@ -1018,7 +1018,7 @@ async function runClamCommand(executable, args, timeoutMs, onLine, options = {})
       else if (/(?:error 60|download failed \\(60\\)|ssl peer certificate)/i.test(output)) {
         reject(new Error(
           "FreshClam could not validate the ClamAV HTTPS certificate. " +
-          "SentryLoom exported the Windows trusted roots, so verify the Windows date/time, " +
+          "Endpointward exported the Windows trusted roots, so verify the Windows date/time, " +
           "corporate TLS inspection certificate, and trusted-root policy before retrying."
         ));
       } else {
@@ -1035,7 +1035,7 @@ export async function fetchMalwareBazaar(config, authKey, fetchImpl) {
     headers: {
       "Auth-Key": authKey,
       "Content-Type": "application/x-www-form-urlencoded",
-      "User-Agent": `SentryLoom/${APP_VERSION}`
+      "User-Agent": `Endpointward/${APP_VERSION}`
     },
     body,
     signal: AbortSignal.timeout(config.requestTimeoutMs)
@@ -1045,7 +1045,7 @@ export async function fetchMalwareBazaar(config, authKey, fetchImpl) {
 export async function fetchUrlhaus(config, authKey, fetchImpl) {
   return fetchJsonFeed("https://urlhaus-api.abuse.ch/v1/payloads/recent/limit/1000/", {
     method: "GET",
-    headers: { "Auth-Key": authKey, "User-Agent": `SentryLoom/${APP_VERSION}` },
+    headers: { "Auth-Key": authKey, "User-Agent": `Endpointward/${APP_VERSION}` },
     signal: AbortSignal.timeout(config.requestTimeoutMs)
   }, { allowedHosts: SOURCE_HOSTS.urlhaus, maxBytes: 50 * 1024 * 1024, fetchImpl });
 }
@@ -1053,7 +1053,7 @@ export async function fetchUrlhaus(config, authKey, fetchImpl) {
 export async function fetchFeodoTracker(config, fetchImpl) {
   return fetchJsonFeed("https://feodotracker.abuse.ch/downloads/ipblocklist_recommended.json", {
     method: "GET",
-    headers: { "User-Agent": `SentryLoom/${APP_VERSION}` },
+    headers: { "User-Agent": `Endpointward/${APP_VERSION}` },
     signal: AbortSignal.timeout(config.requestTimeoutMs)
   }, { allowedHosts: SOURCE_HOSTS.feodotracker, maxBytes: 10 * 1024 * 1024, fetchImpl });
 }
@@ -1064,7 +1064,7 @@ export async function fetchThreatFox(config, authKey, fetchImpl) {
     headers: {
       "Auth-Key": authKey,
       "Content-Type": "application/json",
-      "User-Agent": `SentryLoom/${APP_VERSION}`
+      "User-Agent": `Endpointward/${APP_VERSION}`
     },
     body: JSON.stringify({ query: "get_iocs", days: 7 }),
     signal: AbortSignal.timeout(config.requestTimeoutMs)
