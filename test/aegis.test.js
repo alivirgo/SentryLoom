@@ -67,7 +67,7 @@ const {
 test("Windows endpoint processes default to one machine-wide data directory", {
   skip: process.platform !== "win32"
 }, () => {
-  const programData = path.join(os.tmpdir(), "sentryloom-program-data-contract");
+  const programData = path.join(os.tmpdir(), "endpointward-program-data-contract");
   const result = spawnSync(process.execPath, [
     "--input-type=module",
     "--eval",
@@ -77,12 +77,12 @@ test("Windows endpoint processes default to one machine-wide data directory", {
     encoding: "utf8",
     env: {
       ...process.env,
-      SENTRYLOOM_DATA_DIR: "",
+      ENDPOINTWARD_DATA_DIR: "",
       PROGRAMDATA: programData
     }
   });
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(result.stdout, path.join(programData, "SentryLoom"));
+  assert.equal(result.stdout, path.join(programData, "Endpointward"));
 });
 
 test("Windows setup protects installed files behind bounded maintenance authorization", async () => {
@@ -94,12 +94,12 @@ test("Windows setup protects installed files behind bounded maintenance authoriz
     installer,
     relocationBootstrap
   ] = await Promise.all([
-    fs.readFile("Set-SentryLoomTamperProtection.ps1", "utf8"),
-    fs.readFile("Authorize-SentryLoomMaintenance.ps1", "utf8"),
-    fs.readFile("Register-SentryLoom.ps1", "utf8"),
-    fs.readFile("Remove-SentryLoom.ps1", "utf8"),
-    fs.readFile(path.join("installer", "SentryLoom.iss"), "utf8"),
-    fs.readFile(path.join("installer", "Relocate-SentryLoomHq.mjs"), "utf8")
+    fs.readFile("Set-EndpointwardTamperProtection.ps1", "utf8"),
+    fs.readFile("Authorize-EndpointwardMaintenance.ps1", "utf8"),
+    fs.readFile("Register-Endpointward.ps1", "utf8"),
+    fs.readFile("Remove-Endpointward.ps1", "utf8"),
+    fs.readFile(path.join("installer", "Endpointward.iss"), "utf8"),
+    fs.readFile(path.join("installer", "Relocate-EndpointwardHq.mjs"), "utf8")
   ]);
 
   assert.match(tamperScript, /SetAccessRuleProtection\(\$true,\s*\$false\)/);
@@ -113,11 +113,11 @@ test("Windows setup protects installed files behind bounded maintenance authoriz
   assert.match(authorizationScript, /'file-maintenance'/);
   assert.match(authorizationScript, /if \(\$Result\.Accepted\)[\s\S]+Enable-AuthorizedFileMaintenance/);
   assert.match(authorizationScript, /Open Authorized File Maintenance[\s\S]+-UserId 'SYSTEM'/);
-  assert.match(registrationScript, /Authorize SentryLoom File Maintenance\.lnk/);
+  assert.match(registrationScript, /Authorize Endpointward File Maintenance\.lnk/);
   assert.match(registrationScript, /TamperHelper -Mode Apply/);
-  assert.match(removalScript, /SentryLoom - Restore Tamper Protection/);
+  assert.match(removalScript, /Endpointward - Restore Tamper Protection/);
 
-  assert.match(installer, /Set-SentryLoomTamperProtection\.ps1/);
+  assert.match(installer, /Set-EndpointwardTamperProtection\.ps1/);
   assert.match(installer, /InstalledAuthorizer[\s\S]+-Action file-maintenance/);
   assert.match(authorizationScript, /Identity\.User\.Value -eq 'S-1-5-18'/);
   assert.match(
@@ -126,11 +126,11 @@ test("Windows setup protects installed files behind bounded maintenance authoriz
   );
   assert.match(installer, /JsonStringValue\(RequestResult, 'verificationCode'\)/);
   assert.match(installer, /hq poll-pending-env/);
-  assert.doesNotMatch(installer, /SENTRYLOOM_HQ_VERIFICATION_CODE/);
-  assert.match(installer, /ExtractTemporaryFile\('Relocate-SentryLoomHq\.mjs'\)/);
+  assert.doesNotMatch(installer, /ENDPOINTWARD_HQ_VERIFICATION_CODE/);
+  assert.match(installer, /ExtractTemporaryFile\('Relocate-EndpointwardHq\.mjs'\)/);
   assert.match(
     installer,
-    /Relocate-SentryLoomHq\.mjs[\s\S]+Requesting authorization to update protected SentryLoom files/
+    /Relocate-EndpointwardHq\.mjs[\s\S]+Requesting authorization to update protected Endpointward files/
   );
   assert.match(relocationBootstrap, /HQ certificate fingerprint mismatch/);
   assert.match(relocationBootstrap, /\/api\/v1\/device\/session/);
@@ -149,7 +149,7 @@ test("Windows upgrades migrate enrolled user state into machine-wide storage", {
   const root = await sandbox("machine-state-migration");
   const localAppData = path.join(root, "user-local");
   const programData = path.join(root, "program-data");
-  const legacy = path.join(localAppData, "SentryLoom");
+  const legacy = path.join(localAppData, "Endpointward");
   await fs.mkdir(path.join(legacy, "keys"), { recursive: true });
   await fs.writeFile(path.join(legacy, "config.json"), JSON.stringify({
     management: { enabled: true }
@@ -165,7 +165,7 @@ test("Windows upgrades migrate enrolled user state into machine-wide storage", {
     "-ExecutionPolicy",
     "Bypass",
     "-File",
-    path.resolve("Backup-SentryLoomState.ps1"),
+    path.resolve("Backup-EndpointwardState.ps1"),
     "-TargetVersion",
     "test"
   ], {
@@ -180,14 +180,14 @@ test("Windows upgrades migrate enrolled user state into machine-wide storage", {
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
   assert.equal(
     await fs.readFile(
-      path.join(programData, "SentryLoom", "keys", "hq-credentials.enc"),
+      path.join(programData, "Endpointward", "keys", "hq-credentials.enc"),
       "utf8"
     ),
     "encrypted-unit-state"
   );
   assert.deepEqual(
     JSON.parse(await fs.readFile(
-      path.join(programData, "SentryLoom", "device-identity.json"),
+      path.join(programData, "Endpointward", "device-identity.json"),
       "utf8"
     )),
     { deviceId: "preserved-device-identity" }
@@ -262,8 +262,8 @@ test("Setup preserves an approved enrollment instead of requesting it again", as
     encoding: "utf8",
     env: {
       ...process.env,
-      SENTRYLOOM_HQ_URL: credentials.serverUrl,
-      SENTRYLOOM_HQ_RESULT_FILE: resultFile
+      ENDPOINTWARD_HQ_URL: credentials.serverUrl,
+      ENDPOINTWARD_HQ_RESULT_FILE: resultFile
     }
   });
   assert.equal(result.status, 0, result.stderr);
@@ -333,16 +333,16 @@ const {
 } = await import("../src/lib/client-update.js");
 
 async function sandbox(name) {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), `sentryloom-${name}-`));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), `endpointward-${name}-`));
   sandboxes.push(root);
-  process.env.SENTRYLOOM_DATA_DIR = path.join(root, "data");
+  process.env.ENDPOINTWARD_DATA_DIR = path.join(root, "data");
   return root;
 }
 
 test.afterEach(async () => {
   while (sandboxes.length) {
     const root = path.resolve(sandboxes.pop());
-    if (path.dirname(root) !== path.resolve(os.tmpdir()) || !path.basename(root).startsWith("sentryloom-")) {
+    if (path.dirname(root) !== path.resolve(os.tmpdir()) || !path.basename(root).startsWith("endpointward-")) {
       throw new Error(`Refusing to clean unexpected test path: ${root}`);
     }
     await fs.rm(root, { recursive: true, force: true });
@@ -351,7 +351,7 @@ test.afterEach(async () => {
 
 test("client upgrades preserve stored settings and record a versioned migration", async () => {
   await sandbox("config-upgrade");
-  const data = process.env.SENTRYLOOM_DATA_DIR;
+  const data = process.env.ENDPOINTWARD_DATA_DIR;
   await fs.mkdir(data, { recursive: true });
   await fs.writeFile(path.join(data, "config.json"), JSON.stringify({
     schemaVersion: 1,
@@ -451,7 +451,7 @@ test("quarantine encrypts, removes, restores, and permanently deletes files", as
   await fs.writeFile(first, "quarantine round trip");
   const item = await quarantineFile(first, { sha256: "abc", findings: [{ name: "Test" }] });
   await assert.rejects(fs.access(first));
-  const encrypted = path.join(process.env.SENTRYLOOM_DATA_DIR, "quarantine", item.storedFile);
+  const encrypted = path.join(process.env.ENDPOINTWARD_DATA_DIR, "quarantine", item.storedFile);
   const container = await fs.readFile(encrypted);
   assert.equal(container.includes(Buffer.from("quarantine round trip")), false);
   const restored = await restoreQuarantine(item.id);
@@ -474,7 +474,7 @@ test("quarantine recovers a corrupt index from its last-known-good copy", async 
     sha256: "recovery-hash",
     findings: [{ name: "Recovery test" }]
   });
-  const quarantine = path.join(process.env.SENTRYLOOM_DATA_DIR, "quarantine");
+  const quarantine = path.join(process.env.ENDPOINTWARD_DATA_DIR, "quarantine");
   const indexFile = path.join(quarantine, "index.json");
   await fs.writeFile(indexFile, Buffer.alloc(96));
 
@@ -497,7 +497,7 @@ test("quarantine discovers encrypted containers when all index metadata is lost"
   const source = path.join(root, "orphan.bin");
   await fs.writeFile(source, "orphaned encrypted item");
   const item = await quarantineFile(source);
-  const quarantine = path.join(process.env.SENTRYLOOM_DATA_DIR, "quarantine");
+  const quarantine = path.join(process.env.ENDPOINTWARD_DATA_DIR, "quarantine");
   await fs.rm(path.join(quarantine, "index.last-good.json"));
   await fs.writeFile(path.join(quarantine, "index.json"), Buffer.from([0, 0, 0, 0, 1, 2, 3]));
 
@@ -734,7 +734,7 @@ test("Downloads deep protection stabilizes files and uses the full scan pipeline
 
 test("managed client replaces a preserved HQ target, encrypts enrollment, and executes allowlisted commands", async () => {
   const root = await sandbox("hq-client");
-  process.env.SENTRYLOOM_ALLOW_INSECURE_HQ = "1";
+  process.env.ENDPOINTWARD_ALLOW_INSECURE_HQ = "1";
   const store = await new HqStore(path.join(root, "hq.sqlite")).open();
   const hq = await createHqServer({
     hqName: "Test HQ",
@@ -761,7 +761,7 @@ test("managed client replaces a preserved HQ target, encrypts enrollment, and ex
       enrolledAt: new Date().toISOString()
     });
     const oldConnectorState = path.join(
-      process.env.SENTRYLOOM_DATA_DIR,
+      process.env.ENDPOINTWARD_DATA_DIR,
       "hq-connector-state.json"
     );
     await fs.mkdir(path.dirname(oldConnectorState), { recursive: true });
@@ -815,7 +815,7 @@ test("managed client replaces a preserved HQ target, encrypts enrollment, and ex
     let credentials = approval.credentials;
     assert.equal((await loadHqCredentials()).deviceId, credentials.deviceId);
     const encrypted = await fs.readFile(path.join(
-      process.env.SENTRYLOOM_DATA_DIR,
+      process.env.ENDPOINTWARD_DATA_DIR,
       "keys",
       "hq-credentials.enc"
     ));
@@ -865,7 +865,7 @@ test("managed client replaces a preserved HQ target, encrypts enrollment, and ex
     assert.equal(store.listCommands(credentials.deviceId)[0].status, "completed");
     assert.equal(store.listDevices()[0].status.security.score, 96);
   } finally {
-    delete process.env.SENTRYLOOM_ALLOW_INSECURE_HQ;
+    delete process.env.ENDPOINTWARD_ALLOW_INSECURE_HQ;
     await hq.close();
     store.close();
   }
@@ -884,7 +884,7 @@ test("only one local process lease can own the HQ connector", async () => {
 
 test("terminal enrollment failures release the background management lease", async () => {
   const root = await sandbox("hq-terminal-lease");
-  process.env.SENTRYLOOM_ALLOW_INSECURE_HQ = "1";
+  process.env.ENDPOINTWARD_ALLOW_INSECURE_HQ = "1";
   const databasePath = path.join(root, "hq.sqlite");
   const store = await new HqStore(databasePath).open();
   const hq = await createHqServer({
@@ -932,7 +932,7 @@ test("terminal enrollment failures release the background management lease", asy
       event.type === "hq.enrollment-verification-failed"
     ));
   } finally {
-    delete process.env.SENTRYLOOM_ALLOW_INSECURE_HQ;
+    delete process.env.ENDPOINTWARD_ALLOW_INSECURE_HQ;
     await hq.close();
     store.close();
   }
@@ -943,10 +943,10 @@ test("CLI writes sanitized setup diagnostics when HQ enrollment cannot start", a
   const failureLog = path.join(root, "hq-error.txt");
   const environment = {
     ...process.env,
-    SENTRYLOOM_FAILURE_LOG: failureLog,
-    SENTRYLOOM_HQ_URL: "",
-    SENTRYLOOM_HQ_ENROLLMENT_CODE: "",
-    SENTRYLOOM_HQ_FINGERPRINT: ""
+    ENDPOINTWARD_FAILURE_LOG: failureLog,
+    ENDPOINTWARD_HQ_URL: "",
+    ENDPOINTWARD_HQ_ENROLLMENT_CODE: "",
+    ENDPOINTWARD_HQ_FINGERPRINT: ""
   };
   const result = spawnSync(process.execPath, [
     "--disable-warning=ExperimentalWarning",
@@ -961,7 +961,7 @@ test("CLI writes sanitized setup diagnostics when HQ enrollment cannot start", a
   });
   assert.equal(result.status, 1);
   const diagnostic = await fs.readFile(failureLog, "utf8");
-  assert.match(diagnostic, /SENTRYLOOM_HQ_URL.*required/);
+  assert.match(diagnostic, /ENDPOINTWARD_HQ_URL.*required/);
   assert.doesNotMatch(diagnostic, /token|enrollment code:/i);
 });
 
@@ -970,7 +970,7 @@ test("audit log detects tampering", async () => {
   await appendAudit("test.one", { safe: true });
   await appendAudit("test.two", { safe: true });
   assert.deepEqual(await verifyAuditLog(), { valid: true, records: 2 });
-  const auditFile = path.join(process.env.SENTRYLOOM_DATA_DIR, "logs", "audit.jsonl");
+  const auditFile = path.join(process.env.ENDPOINTWARD_DATA_DIR, "logs", "audit.jsonl");
   const content = await fs.readFile(auditFile, "utf8");
   await fs.writeFile(auditFile, content.replace('"safe":true', '"safe":false'));
   const result = await verifyAuditLog();
@@ -1107,7 +1107,7 @@ test("dashboard requires a launch session and CSRF for writes", async () => {
     const appResponse = await fetch(`${origin}/app.js`, { headers: { Cookie: cookie } });
     const appSource = await appResponse.text();
     assert.match(appSource, /Discovery completed without changing the active HQ/);
-    const iconResponse = await fetch(`${origin}/sentryloom-icon.png`, { headers: { Cookie: cookie } });
+    const iconResponse = await fetch(`${origin}/endpointward-icon.png`, { headers: { Cookie: cookie } });
     assert.equal(iconResponse.status, 200);
     assert.equal(iconResponse.headers.get("content-type"), "image/png");
     assert.deepEqual(
@@ -1129,7 +1129,7 @@ test("dashboard requires a launch session and CSRF for writes", async () => {
     assert.equal(rejectedWrite.status, 403);
     const acceptedWrite = await fetch(`${origin}/api/scans/cancel`, {
       method: "POST",
-      headers: { Cookie: cookie, "X-SentryLoom-CSRF": bootstrap.csrf }
+      headers: { Cookie: cookie, "X-Endpointward-CSRF": bootstrap.csrf }
     });
     assert.equal(acceptedWrite.status, 409);
   } finally {
@@ -1201,7 +1201,7 @@ test("managed HQ server changes require maintenance authorization", async () => 
       headers: {
         Cookie: cookie,
         "Content-Type": "application/json",
-        "X-SentryLoom-CSRF": csrf
+        "X-Endpointward-CSRF": csrf
       },
       body: JSON.stringify({
         serverUrl,
@@ -1268,7 +1268,7 @@ test("managed HQ server changes require maintenance authorization", async () => 
       headers: {
         Cookie: cookie,
         "Content-Type": "application/json",
-        "X-SentryLoom-CSRF": csrf
+        "X-Endpointward-CSRF": csrf
       },
       body: "{}"
     });
@@ -1286,7 +1286,7 @@ test("managed HQ server changes require maintenance authorization", async () => 
       headers: {
         Cookie: cookie,
         "Content-Type": "application/json",
-        "X-SentryLoom-CSRF": csrf
+        "X-Endpointward-CSRF": csrf
       },
       body: JSON.stringify({ serverUrl: "https://moved-hq:8443" })
     });
@@ -1513,7 +1513,7 @@ test("abuse.ch credential is encrypted at rest", async () => {
   await saveThreatCredentials({ abuseChAuthKey: key });
   assert.deepEqual(await threatCredentialStatus(), { abuseChConfigured: true });
   assert.equal((await loadThreatCredentials()).abuseChAuthKey, key);
-  const encrypted = await fs.readFile(path.join(process.env.SENTRYLOOM_DATA_DIR, "keys", "threat-credentials.enc"));
+  const encrypted = await fs.readFile(path.join(process.env.ENDPOINTWARD_DATA_DIR, "keys", "threat-credentials.enc"));
   assert.equal(encrypted.includes(Buffer.from(key)), false);
 });
 
@@ -1562,7 +1562,7 @@ test("managed client UI identifies server-maintained abuse.ch access", async () 
   assert.match(html, /data-feed="misp-botvrij"/);
   assert.match(html, /data-feed="lmd"/);
   assert.match(html, /VirusTotal has API quotas/);
-  assert.match(app, /Auth-Key is added and maintained by SentryLoom HQ/);
+  assert.match(app, /Auth-Key is added and maintained by Endpointward HQ/);
   assert.match(app, /key is never sent to or stored on this client/);
 });
 
@@ -1721,21 +1721,21 @@ test("native scan picker accepts only file and folder modes", () => {
 test("client update manifests reject path traversal and invalid hashes", () => {
   assert.throws(() => validateClientUpdateManifest({
     version: "1.2.3",
-    fileName: "../SentryLoom-Setup-1.2.3.exe",
+    fileName: "../Endpointward-Setup-1.2.3.exe",
     size: 4096,
     sha256: "a".repeat(64),
     signerThumbprint: "b".repeat(40)
   }), /package name/);
   assert.throws(() => validateClientUpdateManifest({
     version: "1.2.3",
-    fileName: "SentryLoom-Setup-1.2.3.exe",
+    fileName: "Endpointward-Setup-1.2.3.exe",
     size: 4096,
     sha256: "not-a-hash",
     signerThumbprint: "b".repeat(40)
   }), /update hash/);
   assert.throws(() => validateClientUpdateManifest({
     version: "1.2.3",
-    fileName: "SentryLoom-Setup-1.2.4.exe",
+    fileName: "Endpointward-Setup-1.2.4.exe",
     size: 4096,
     sha256: "a".repeat(64),
     signerThumbprint: "b".repeat(40)
@@ -1746,7 +1746,7 @@ test("signed HQ client updates stage silently and reject the wrong publisher", a
   await sandbox("client-update");
   const manifest = {
     version: "9.8.7",
-    fileName: "SentryLoom-Setup-9.8.7.exe",
+    fileName: "Endpointward-Setup-9.8.7.exe",
     size: 4096,
     sha256: "A".repeat(64),
     signerThumbprint: "B".repeat(40),
@@ -1781,7 +1781,7 @@ test("signed HQ client updates stage silently and reject the wrong publisher", a
   assert.equal(result.targetVersion, manifest.version);
   assert.equal(launched, 1);
   const status = JSON.parse(await fs.readFile(path.join(
-    process.env.SENTRYLOOM_DATA_DIR,
+    process.env.ENDPOINTWARD_DATA_DIR,
     "updates",
     "status.json"
   ), "utf8"));
@@ -1823,7 +1823,7 @@ test("ClamAV timeout returns a bounded scan error instead of hanging", async () 
 
 test("revoked clients automatically re-enroll with their pinned HQ", async () => {
   await sandbox("hq-reauth");
-  const dbFile = path.join(process.env.SENTRYLOOM_DATA_DIR, "db", "hq-test-reauth.db");
+  const dbFile = path.join(process.env.ENDPOINTWARD_DATA_DIR, "db", "hq-test-reauth.db");
   await fs.mkdir(path.dirname(dbFile), { recursive: true }).catch(() => {});
   const store = await new HqStore(dbFile).open();
   const config = {
@@ -1847,7 +1847,7 @@ test("revoked clients automatically re-enroll with their pinned HQ", async () =>
   };
   const hq = await createHqServer(config, { store, httpOnly: true });
   const address = await hq.listen("127.0.0.1", 0);
-  process.env.SENTRYLOOM_ALLOW_INSECURE_HQ = "1";
+  process.env.ENDPOINTWARD_ALLOW_INSECURE_HQ = "1";
 
   try {
     const pending = await requestHqEnrollment({
@@ -1899,7 +1899,7 @@ test("revoked clients automatically re-enroll with their pinned HQ", async () =>
 
     await engine.stopManagement();
   } finally {
-    delete process.env.SENTRYLOOM_ALLOW_INSECURE_HQ;
+    delete process.env.ENDPOINTWARD_ALLOW_INSECURE_HQ;
     await hq.close();
     store.close();
     await fs.rm(dbFile, { force: true }).catch(() => {});

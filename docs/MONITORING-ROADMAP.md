@@ -19,7 +19,7 @@
 
 ## Network-focused additions
 
-1. **Native WFP flow telemetry** — current enforcement delegates IP rules to Microsoft-signed Windows Defender Firewall/WFP. A separately Microsoft-signed callout driver is still needed for loss-resistant per-flow telemetry owned directly by SentryLoom.
+1. **Native WFP flow telemetry** — current enforcement delegates IP rules to Microsoft-signed Windows Defender Firewall/WFP. A separately Microsoft-signed callout driver is still needed for loss-resistant per-flow telemetry owned directly by Endpointward.
 2. **DNS policy integrity** — detect adapter changes, VPN overrides, browser-owned DoH, proxy changes, NRPT/Group Policy, and DNS leakage. Reapply only under an explicit “enforce profile” policy.
 3. **TLS metadata** — record destination, SNI where visible, certificate chain and signer anomalies without decrypting content. TLS interception should remain a separate opt-in enterprise product with managed trust roots.
 4. **Local firewall change monitoring** — baseline Windows Firewall rules and alert on newly opened inbound ports, disabled profiles, or broad allow rules. Never delete rules automatically without policy attribution.

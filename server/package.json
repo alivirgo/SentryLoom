@@ -1,9 +1,9 @@
 {
-  "name": "sentryloom-hq",
+  "name": "endpointward-hq",
   "version": "0.5.0",
   "private": true,
   "type": "module",
-  "description": "On-premises management server for SentryLoom Endpoint Security.",
+  "description": "On-premises management server for Endpointward Endpoint Security.",
   "license": "Apache-2.0",
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning src/main.js",

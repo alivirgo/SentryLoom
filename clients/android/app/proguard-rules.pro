@@ -1,1 +1,1 @@
--keep class org.sentryloom.android.** { *; }
+-keep class org.endpointward.android.** { *; }

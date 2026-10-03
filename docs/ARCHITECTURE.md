@@ -11,7 +11,7 @@ Local files ──> Scanner ──> Detection policy ──> Encrypted quarantin
                                          │
                               Optional pinned HTTPS
                                          │
-                                 SentryLoom HQ
+                                 Endpointward HQ
 ```
 
 The scanner does not execute inspected content. The dashboard binds only to `127.0.0.1` (or `::1` when explicitly configured), requires a random launch token to establish a session, uses an HttpOnly SameSite cookie, and requires a separate CSRF token for every mutation.
@@ -101,7 +101,7 @@ DNS filtering is a user-initiated system mutation. The dashboard calls a narrowl
 
 ## Operational model
 
-`Register-SentryLoom.ps1` registers machine scheduled tasks:
+`Register-Endpointward.ps1` registers machine scheduled tasks:
 
 - quick scan daily at 02:00, with start-when-available;
 - full scan weekly while idle;
@@ -110,7 +110,7 @@ DNS filtering is a user-initiated system mutation. The dashboard calls a narrowl
 The native WinForms launcher runs resident protection and scheduled scans
 without a console window and captures bounded background output. A separate
 per-session launcher mode owns the notification-area health icon. Setup,
-resident protection, tray, and GUI share `%ProgramData%\SentryLoom`; upgrades
+resident protection, tray, and GUI share `%ProgramData%\Endpointward`; upgrades
 migrate legacy per-user state without changing the device identity. The
 dashboard may also host realtime monitoring while open. A local connector
 lease prevents duplicate HQ telemetry streams.

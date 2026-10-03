@@ -1,13 +1,13 @@
 # Changelog
 
-All notable changes to SentryLoom will be documented here.
+All notable changes to Endpointward will be documented here.
 
 The project uses semantic versioning where practical.
 
 ## [0.17.0] - 2026-09-03
 
-SentryLoom Endpoint Security v0.17.0 ships with SentryLoom HQ v0.5.0 and
-SentryLoom Android v0.3.0.
+Endpointward Endpoint Security v0.17.0 ships with Endpointward HQ v0.5.0 and
+Endpointward Android v0.3.0.
 
 - Added acknowledged remote lock across desktop platforms and Android.
 - Added Android Enterprise Device Owner factory wipe and guarded desktop
@@ -25,8 +25,8 @@ SentryLoom Android v0.3.0.
 
 ## [0.16.12] - 2026-09-02
 
-SentryLoom Endpoint Security v0.16.12 ships with SentryLoom HQ v0.4.6 and
-SentryLoom Android v0.2.1.
+Endpointward Endpoint Security v0.16.12 ships with Endpointward HQ v0.4.6 and
+Endpointward Android v0.2.1.
 
 ### Reliable lifecycle management
 
@@ -41,7 +41,7 @@ SentryLoom Android v0.2.1.
 
 ## [0.16.11] - 2026-07-05
 
-SentryLoom Endpoint Security v0.16.11 ships with SentryLoom HQ v0.4.5.
+Endpointward Endpoint Security v0.16.11 ships with Endpointward HQ v0.4.5.
 
 ### Dynamic HQ network addresses
 
@@ -58,7 +58,7 @@ SentryLoom Endpoint Security v0.16.11 ships with SentryLoom HQ v0.4.5.
 
 ## [0.16.10] - 2026-07-05
 
-SentryLoom Endpoint Security v0.16.10 ships with SentryLoom HQ v0.4.5.
+Endpointward Endpoint Security v0.16.10 ships with Endpointward HQ v0.4.5.
 
 ### Managed upgrade authorization recovery
 
@@ -74,7 +74,7 @@ SentryLoom Endpoint Security v0.16.10 ships with SentryLoom HQ v0.4.5.
 
 ## [0.16.9] - 2026-07-05
 
-SentryLoom Endpoint Security v0.16.9 ships with SentryLoom HQ v0.4.5.
+Endpointward Endpoint Security v0.16.9 ships with Endpointward HQ v0.4.5.
 
 ### Verified enrollment and moved-HQ recovery
 
@@ -92,7 +92,7 @@ SentryLoom Endpoint Security v0.16.9 ships with SentryLoom HQ v0.4.5.
 
 ## [0.16.8] - 2026-07-05
 
-SentryLoom Endpoint Security v0.16.8 ships with SentryLoom HQ v0.4.4.
+Endpointward Endpoint Security v0.16.8 ships with Endpointward HQ v0.4.4.
 
 ### Quarantine index self-repair
 
@@ -108,7 +108,7 @@ SentryLoom Endpoint Security v0.16.8 ships with SentryLoom HQ v0.4.4.
 
 ## [0.16.7] - 2026-07-05
 
-SentryLoom Endpoint Security v0.16.7 ships with SentryLoom HQ v0.4.4.
+Endpointward Endpoint Security v0.16.7 ships with Endpointward HQ v0.4.4.
 
 ### Server-owned abuse.ch authentication
 
@@ -127,12 +127,12 @@ SentryLoom Endpoint Security v0.16.7 ships with SentryLoom HQ v0.4.4.
 
 ## [0.16.6] - 2026-07-05
 
-SentryLoom Endpoint Security v0.16.6 ships with SentryLoom HQ v0.4.3.
+Endpointward Endpoint Security v0.16.6 ships with Endpointward HQ v0.4.3.
 
 ### Unattended staged client releases
 
 - Added a configurable HQ staging folder, defaulting to
-  `Z:\Extreme Control\SentryLoom Updates`, with live service-account access
+  `Z:\Extreme Control\Endpointward Updates`, with live service-account access
   status in server settings.
 - Added one-click publication of the highest semantic-versioned client Setup.
   HQ independently validates its Windows Authenticode signature and embedded
@@ -152,7 +152,7 @@ SentryLoom Endpoint Security v0.16.6 ships with SentryLoom HQ v0.4.3.
 
 ## [0.16.5] - 2026-07-04
 
-SentryLoom Endpoint Security v0.16.5 fixes an enrolled-client state split that
+Endpointward Endpoint Security v0.16.5 fixes an enrolled-client state split that
 could show **STANDALONE** in the desktop console while the resident endpoint
 was already enrolled and reporting to HQ.
 
@@ -171,7 +171,7 @@ was already enrolled and reporting to HQ.
 
 - Moved endpoint configuration, encrypted enrollment, device identity,
   connector state, logs, quarantine, and update state from per-user
-  `LocalAppData` to the machine-wide `%ProgramData%\SentryLoom` directory.
+  `LocalAppData` to the machine-wide `%ProgramData%\Endpointward` directory.
 - Added a permission-controlled Setup migration that finds enrolled state from
   either the installing administrator or the active desktop user, preserving
   the existing device ID, HQ credential, settings, and history.
@@ -197,7 +197,7 @@ was already enrolled and reporting to HQ.
 
 ## [0.16.4] - 2026-07-04
 
-SentryLoom Endpoint Security v0.16.4 makes managed-client setup changes
+Endpointward Endpoint Security v0.16.4 makes managed-client setup changes
 explicit and auditable.
 
 ### Client Settings submission controls
@@ -226,7 +226,7 @@ explicit and auditable.
 
 ## [0.16.3] - 2026-07-04
 
-SentryLoom Endpoint Security v0.16.3 ships with SentryLoom HQ v0.4.2. This
+Endpointward Endpoint Security v0.16.3 ships with Endpointward HQ v0.4.2. This
 release focuses on reliable cross-computer enrollment, state-preserving
 Windows Setup upgrades, explicit protected-setting authorization, configurable
 on-premises security telemetry retention, and trustworthy ClamAV updates.
@@ -288,7 +288,7 @@ on-premises security telemetry retention, and trustworthy ClamAV updates.
 
 ## [0.16.1] - 2026-07-04
 
-SentryLoom Endpoint Security v0.16.1 ships with SentryLoom HQ v0.4.1.
+Endpointward Endpoint Security v0.16.1 ships with Endpointward HQ v0.4.1.
 
 ### Security and administration
 
@@ -311,7 +311,7 @@ SentryLoom Endpoint Security v0.16.1 ships with SentryLoom HQ v0.4.1.
   without placing it on the command line, hashing it with PBKDF2-SHA256, and
   verifying the stored hash before Setup can report success.
 - Added actionable setup failure diagnostics and a persistent HQ installation
-  log under `%ProgramData%\SentryLoom HQ\Logs`.
+  log under `%ProgramData%\Endpointward HQ\Logs`.
 - Added detailed live installation activity panes to both Windows setup
   packages while keeping background commands hidden.
 
@@ -325,7 +325,7 @@ SentryLoom Endpoint Security v0.16.1 ships with SentryLoom HQ v0.4.1.
   discovery requests, discovery responses, endpoint HTTPS, and endpoint
   discovery traffic.
 - Scoped HQ inbound rules to `LocalSubnet`, supported Domain/Private/Public
-  Windows profiles, and removed all SentryLoom-owned rules during uninstall.
+  Windows profiles, and removed all Endpointward-owned rules during uninstall.
 
 ### Endpoint and HQ interfaces
 
@@ -342,7 +342,7 @@ SentryLoom Endpoint Security v0.16.1 ships with SentryLoom HQ v0.4.1.
 - Added automated coverage for Unicode setup passwords, stored-password
   verification, directed IPv4 discovery, password consumption, expiration,
   client-specific encrypted delivery, and 20-second maintenance approval.
-- Bumped the Windows endpoint to v0.16.1 and SentryLoom HQ to v0.4.1.
+- Bumped the Windows endpoint to v0.16.1 and Endpointward HQ to v0.4.1.
 
 ## [0.16.0] - 2026-07-04
 

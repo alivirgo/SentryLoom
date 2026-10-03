@@ -1,4 +1,4 @@
-# SentryLoom Android client
+# Endpointward Android client
 
 The Android client is a native, dependency-free Java application for Android
 8.0 (API 26) and newer. It uses the same certificate-pinned enrollment,
@@ -25,7 +25,7 @@ Never ship the shared Android debug certificate as a production identity.
 
 ## Enrollment
 
-1. Open SentryLoom HQ and note its HTTPS address. The SHA-256 certificate
+1. Open Endpointward HQ and note its HTTPS address. The SHA-256 certificate
    fingerprint is optional: when omitted, the app uses trust-on-first-use and
    permanently pins the certificate presented by that first connection.
 2. Install and open the APK.
@@ -57,7 +57,7 @@ safe-boot, factory-reset, USB-data-signaling, and Bluetooth-sharing policy
 controls. On a factory-reset test device with no configured accounts:
 
 ```text
-adb shell dpm set-device-owner org.sentryloom.android/.SentryDeviceAdminReceiver
+adb shell dpm set-device-owner org.endpointward.android/.EndpointwardDeviceAdminReceiver
 ```
 
 Production Device Owner provisioning should use Android Enterprise QR, zero

@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "SentryLoomAndroid"
+rootProject.name = "EndpointwardAndroid"
 include(":app")

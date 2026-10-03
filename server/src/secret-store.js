@@ -6,11 +6,11 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 const AUTH_KEY_PATTERN = /^[A-Za-z0-9._~-]{16,256}$/;
-const ENTROPY = "SentryLoom HQ abuse.ch credential v1";
+const ENTROPY = "Endpointward HQ abuse.ch credential v1";
 
 function powershellPath() {
   if (process.platform !== "win32") {
-    throw new Error("SentryLoom HQ DPAPI secret protection requires Windows");
+    throw new Error("Endpointward HQ DPAPI secret protection requires Windows");
   }
   return path.join(
     process.env.WINDIR || "C:\\Windows",
@@ -25,7 +25,7 @@ async function dpapi(mode, value) {
   const script = [
     "$ErrorActionPreference = 'Stop';",
     "Add-Type -AssemblyName System.Security;",
-    "$payload = [Convert]::FromBase64String($env:SENTRYLOOM_HQ_SECRET_PAYLOAD);",
+    "$payload = [Convert]::FromBase64String($env:ENDPOINTWARD_HQ_SECRET_PAYLOAD);",
     `$entropy = [Text.Encoding]::UTF8.GetBytes('${ENTROPY}');`,
     "try {",
     mode === "protect"
@@ -49,7 +49,7 @@ async function dpapi(mode, value) {
     maxBuffer: 1024 * 1024,
     env: {
       ...process.env,
-      SENTRYLOOM_HQ_SECRET_PAYLOAD: Buffer.from(value).toString("base64")
+      ENDPOINTWARD_HQ_SECRET_PAYLOAD: Buffer.from(value).toString("base64")
     }
   });
   return Buffer.from(stdout.trim(), "base64");

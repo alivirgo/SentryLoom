@@ -780,7 +780,7 @@ export class AntivirusEngine {
 
   async requestMaintenancePassword(options = {}) {
     if (!this.config.management.enabled) {
-      throw new Error("This endpoint is not managed by SentryLoom HQ");
+      throw new Error("This endpoint is not managed by Endpointward HQ");
     }
     const credentials = await loadHqCredentials();
     if (!credentials) {
@@ -954,7 +954,7 @@ export class AntivirusEngine {
     }
     if (type === "client.update") {
       const credentials = await loadHqCredentials();
-      if (!credentials) throw new Error("This endpoint is not enrolled with SentryLoom HQ");
+      if (!credentials) throw new Error("This endpoint is not enrolled with Endpointward HQ");
       const result = await stageClientUpdate(credentials);
       await appendAudit("client.update-scheduled", {
         fromVersion: APP_VERSION,
@@ -1169,7 +1169,7 @@ export class AntivirusEngine {
 
   async saveThreatCredentials(credentials) {
     if (this.config.management.enabled) {
-      throw new Error("Managed endpoints receive abuse.ch access through SentryLoom HQ; no key is stored on this client");
+      throw new Error("Managed endpoints receive abuse.ch access through Endpointward HQ; no key is stored on this client");
     }
     await saveThreatCredentials(credentials);
     await appendAudit("threat-intel.credentials-updated", { abuseChConfigured: Boolean(credentials.abuseChAuthKey) });

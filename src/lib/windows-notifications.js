@@ -51,7 +51,7 @@ export function notificationForEvent(event) {
     return {
       key: `network:${event.channel}:${endpoint}`,
       title: "Network threat detected",
-      message: `SentryLoom matched ${endpoint} to known threat intelligence. Click to review detections.`,
+      message: `Endpointward matched ${endpoint} to known threat intelligence. Click to review detections.`,
       page: "quarantine"
     };
   }
@@ -78,7 +78,7 @@ export function notificationForEvent(event) {
     return {
       key: `defender:${event.event?.recordId || event.id}`,
       title: "Windows security detection",
-      message: "Windows reported a malware detection. Click to review SentryLoom Quarantine.",
+      message: "Windows reported a malware detection. Click to review Endpointward Quarantine.",
       page: "quarantine"
     };
   }
@@ -87,7 +87,7 @@ export function notificationForEvent(event) {
     return {
       key: `hq-offline:${event.serverUrl || event.hqName || "managed"}:${event.id || event.at || ""}`,
       title: "Management connection interrupted",
-      message: `${event.error || "SentryLoom HQ is unreachable"}. Local protection remains active and reconnection is automatic.`,
+      message: `${event.error || "Endpointward HQ is unreachable"}. Local protection remains active and reconnection is automatic.`,
       page: "settings",
       severity: "Warning"
     };
@@ -97,7 +97,7 @@ export function notificationForEvent(event) {
     return {
       key: `hq-restored:${event.serverUrl || event.hqName || "managed"}:${event.id || event.at || ""}`,
       title: "Management connection restored",
-      message: "This endpoint is online with SentryLoom HQ again.",
+      message: "This endpoint is online with Endpointward HQ again.",
       page: "settings",
       severity: "Info"
     };
@@ -117,7 +117,7 @@ export function notificationForEvent(event) {
     return {
       key: `dlp-block:${event.documentId || event.id}:${event.channel || "transfer"}`,
       title: "Super Confidential transfer blocked",
-      message: `SentryLoom blocked a ${event.channel || "data"} transfer. Contact your administrator to allow the destination.`,
+      message: `Endpointward blocked a ${event.channel || "data"} transfer. Contact your administrator to allow the destination.`,
       page: "activity",
       severity: "Error"
     };
@@ -137,7 +137,7 @@ export function notificationForEvent(event) {
   if (failure) {
     return {
       key: `failure:${event.type}:${event.channel || event.source || ""}`,
-      title: "SentryLoom needs attention",
+      title: "Endpointward needs attention",
       message: `${event.type.replaceAll(".", " ")}: ${event.error || event.reason || event.message || "an operation failed"}`,
       page: event.type.startsWith("scan.") ? "scan" : "activity",
       severity: "Error"
@@ -149,9 +149,9 @@ export function notificationForEvent(event) {
 
 export function showDetectionNotification(notification) {
   if (process.platform !== "win32" || !notification) return false;
-  const script = path.join(applicationDirectory, "Show-SentryLoomNotification.ps1");
-  const installedLauncher = path.join(applicationDirectory, "SentryLoom.exe");
-  const developmentLauncher = path.join(applicationDirectory, "build", "output", "SentryLoom.exe");
+  const script = path.join(applicationDirectory, "Show-EndpointwardNotification.ps1");
+  const installedLauncher = path.join(applicationDirectory, "Endpointward.exe");
+  const developmentLauncher = path.join(applicationDirectory, "build", "output", "Endpointward.exe");
   const launcher = fs.existsSync(installedLauncher) ? installedLauncher : developmentLauncher;
   if (!fs.existsSync(script) || !fs.existsSync(launcher)) return false;
 

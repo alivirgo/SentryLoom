@@ -14,9 +14,9 @@ import { ThreatGateway } from "./threat-gateway.js";
 
 const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 const publicDirectory = path.resolve(moduleDirectory, "..", "public");
-const DISCOVERY_REQUEST = "SENTRYLOOM_HQ_DISCOVER_V1";
+const DISCOVERY_REQUEST = "ENDPOINTWARD_HQ_DISCOVER_V1";
 const HQ_VERSION = "0.5.0";
-const DEFAULT_UPDATE_STAGING = "Z:\\Extreme Control\\SentryLoom Updates";
+const DEFAULT_UPDATE_STAGING = "Z:\\Extreme Control\\Endpointward Updates";
 const HQ_CAPABILITIES = Object.freeze([
   "verified-enrollment-v1",
   "hq-address-relocation-v1",
@@ -78,6 +78,12 @@ export function deviceSupportsCommand(device, type) {
   // every command in the original allowlist.
   return !Array.isArray(advertised) || advertised.includes(type);
 }
+export function generateMaintenanceCredential() {
+  const prefix = "EPWard-";
+  const token = crypto.randomBytes(24).toString("base64url");
+  return prefix + token;
+}
+
 export function validWipeConfirmation(device, supplied) {
   return Boolean(device?.name) && supplied === `WIPE ${device.name}`;
 }
@@ -342,7 +348,7 @@ export async function createHqServer(config, options = {}) {
   let discoverySocket = null;
 
   function adminSession(request) {
-    const id = cookies(request).sentryloom_hq_session;
+    const id = cookies(request).endpointward_hq_session;
     const session = sessions.get(id);
     if (!session || Date.now() - session.createdAt > config.admin.sessionHours * 60 * 60 * 1000) {
       if (id) sessions.delete(id);
@@ -385,7 +391,7 @@ export async function createHqServer(config, options = {}) {
   function clientSession(request) {
     const authorization = request.headers.authorization || "";
     const token = authorization.startsWith("Bearer ") ? authorization.slice(7) : "";
-    return store.authenticateDevice(request.headers["x-sentryloom-device"], token);
+    return store.authenticateDevice(request.headers["x-endpointward-device"], token);
   }
 
   function queueClientUpdate(update) {
@@ -412,10 +418,10 @@ export async function createHqServer(config, options = {}) {
 
   async function handler(request, response) {
     try {
-      const url = new URL(request.url, "https://sentryloom-hq.local");
+      const url = new URL(request.url, "https://endpointward-hq.local");
       if (request.method === "GET" && url.pathname === "/api/v1/hq") {
         sendJson(response, 200, {
-          protocol: "sentryloom-hq/1",
+          protocol: "endpointward-hq/1",
           name: config.hqName,
           version: HQ_VERSION,
           capabilities: HQ_CAPABILITIES,
@@ -443,7 +449,7 @@ export async function createHqServer(config, options = {}) {
         }
         const enrollment = store.enrollDevice(device, address);
         sendJson(response, 201, {
-          protocol: "sentryloom-hq/1",
+          protocol: "endpointward-hq/1",
           hqName: config.hqName,
           deviceId: enrollment.id,
           token: enrollment.token,
@@ -469,7 +475,7 @@ export async function createHqServer(config, options = {}) {
           since: Date.now() - prior.since > 60 * 60 * 1000 ? Date.now() : prior.since
         });
         sendJson(response, 202, {
-          protocol: "sentryloom-hq/1",
+          protocol: "endpointward-hq/1",
           hqName: config.hqName,
           requestId: pending.id,
           requestSecret: pending.secret,
@@ -492,7 +498,7 @@ export async function createHqServer(config, options = {}) {
         }
         const result = store.provisionEnrollmentRequest(pending);
         sendJson(response, 200, {
-          protocol: "sentryloom-hq/1",
+          protocol: "endpointward-hq/1",
           hqName: config.hqName,
           ...result
         });
@@ -507,7 +513,7 @@ export async function createHqServer(config, options = {}) {
         }
         if (request.method === "GET" && url.pathname === "/api/v1/device/session") {
           sendJson(response, 200, {
-            protocol: "sentryloom-hq/1",
+            protocol: "endpointward-hq/1",
             hqName: config.hqName,
             deviceId: device.id,
             authenticated: true
@@ -630,7 +636,7 @@ export async function createHqServer(config, options = {}) {
             "Content-Length": update.size,
             "Content-Disposition": `attachment; filename="${update.fileName}"`,
             "Cache-Control": "private, no-store",
-            "X-SentryLoom-SHA256": update.sha256,
+            "X-Endpointward-SHA256": update.sha256,
             "X-Content-Type-Options": "nosniff"
           });
           await new Promise((resolve, reject) => {
@@ -684,7 +690,7 @@ export async function createHqServer(config, options = {}) {
         };
         sessions.set(id, session);
         sendJson(response, 200, { csrf: session.csrf }, {
-          "Set-Cookie": `sentryloom_hq_session=${id}; HttpOnly; Secure; SameSite=Strict; Path=/`
+          "Set-Cookie": `endpointward_hq_session=${id}; HttpOnly; Secure; SameSite=Strict; Path=/`
         });
         return;
       }
@@ -695,7 +701,7 @@ export async function createHqServer(config, options = {}) {
           sendJson(response, 401, { error: "Administrator session required" });
           return;
         }
-        if (request.method !== "GET" && request.headers["x-sentryloom-csrf"] !== session.csrf) {
+        if (request.method !== "GET" && request.headers["x-endpointward-csrf"] !== session.csrf) {
           sendJson(response, 403, { error: "Request verification failed" });
           return;
         }
@@ -777,14 +783,14 @@ export async function createHqServer(config, options = {}) {
         }
         if (request.method === "POST" && url.pathname === "/api/admin/maintenance/passwords") {
           const body = await readJson(request);
-          const password = `SL-${crypto.randomBytes(24).toString("base64url")}`;
-          const policy = store.createMaintenancePassword(password, {
+          const generatedCredential = generateMaintenanceCredential();
+          const policy = store.createMaintenancePassword(generatedCredential, {
             minutes: body.minutes ?? config.maintenance.defaultMinutes,
             uses: body.uses ?? config.maintenance.defaultUses,
             source: "administrator"
           });
           sendJson(response, 201, {
-            password,
+            password: generatedCredential,
             ...policy,
             notice: "This password is shown once. Store it securely or generate another."
           });
@@ -821,8 +827,8 @@ export async function createHqServer(config, options = {}) {
             });
             return;
           }
-          const password = `SL-${crypto.randomBytes(24).toString("base64url")}`;
-          const policy = store.createMaintenancePassword(password, {
+          const generatedCredential = generateMaintenanceCredential();
+          const policy = store.createMaintenancePassword(generatedCredential, {
             minutes: 2,
             uses: 1,
             source: "client-request",
@@ -834,7 +840,7 @@ export async function createHqServer(config, options = {}) {
               key: pending.publicKey,
               padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
               oaepHash: "sha256"
-            }, Buffer.from(password, "utf8")).toString("base64");
+            }, Buffer.from(generatedCredential, "utf8")).toString("base64");
           } catch (error) {
             store.revokeMaintenancePassword(policy.id);
             throw new Error(`Could not encrypt the maintenance password for the endpoint: ${error.message}`);
@@ -1052,19 +1058,19 @@ export async function createHqServer(config, options = {}) {
       if (options.httpOnly || config.discovery?.enabled === false || discoverySocket) return;
       discoverySocket = dgram.createSocket({ type: "udp4", reuseAddr: true });
       discoverySocket.on("error", (error) => {
-        console.error(`SentryLoom HQ discovery error: ${error.message}`);
+        console.error(`Endpointward HQ discovery error: ${error.message}`);
       });
       discoverySocket.on("message", (message, remote) => {
         if (message.toString("utf8").trim() !== DISCOVERY_REQUEST) return;
         const response = Buffer.from(JSON.stringify({
-          protocol: "sentryloom-hq/1",
+          protocol: "endpointward-hq/1",
           name: config.hqName,
           url: `https://${config.publicHost}:${config.port}`,
           fingerprint256: config.tls.fingerprint256
         }));
         discoverySocket.send(response, remote.port, remote.address, (error) => {
           if (error) {
-            console.error(`SentryLoom HQ discovery response failed for ${remote.address}: ${error.message}`);
+            console.error(`Endpointward HQ discovery response failed for ${remote.address}: ${error.message}`);
           }
         });
       });

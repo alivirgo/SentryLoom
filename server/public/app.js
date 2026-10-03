@@ -50,7 +50,7 @@ function desktopAlert(alert) {
 async function api(url, options = {}) {
   const headers = { ...(options.headers || {}) };
   if (options.body) headers["Content-Type"] = "application/json";
-  if (options.method && options.method !== "GET") headers["X-SentryLoom-CSRF"] = csrf;
+  if (options.method && options.method !== "GET") headers["X-Endpointward-CSRF"] = csrf;
   const response = await fetch(url, { ...options, headers });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body.error || `Request failed (${response.status})`);
@@ -331,7 +331,7 @@ function renderUpdateRelease() {
     : "Administrator-triggered deployment";
   if (!update) {
     $("#update-release").innerHTML = `
-      <div class="update-copy"><strong>No signed client update published</strong><span>Run Publish-SentryLoomUpdate.ps1 on the HQ server to publish a signed Setup package.</span></div>
+      <div class="update-copy"><strong>No signed client update published</strong><span>Run Publish-EndpointwardUpdate.ps1 on the HQ server to publish a signed Setup package.</span></div>
       <button class="primary" id="deploy-update" disabled>Deploy update</button>`;
     return;
   }
@@ -428,7 +428,7 @@ function renderServerSettings(settings) {
   stagingState.textContent = staging?.accessible
     ? staging.latest
       ? `Accessible to HQ · newest file: ${staging.latest.fileName}`
-      : "Accessible to HQ · no SentryLoom Setup file found"
+      : "Accessible to HQ · no Endpointward Setup file found"
     : staging?.error ||
       "HQ checks this folder using its SYSTEM service identity. Use a UNC path for network shares.";
   if (!serverSettingsRendered) {
@@ -548,7 +548,7 @@ $("#refresh-fleet").addEventListener("click", () => refresh().catch((error) => t
 $("#update-release").addEventListener("click", async (event) => {
   const button = event.target.closest("#deploy-update");
   if (!button || button.disabled || !updateState.update) return;
-  if (!window.confirm(`Deploy SentryLoom ${updateState.update.version} to every eligible managed endpoint? Clients will verify the signed package and update silently.`)) return;
+  if (!window.confirm(`Deploy Endpointward ${updateState.update.version} to every eligible managed endpoint? Clients will verify the signed package and update silently.`)) return;
   try {
     button.disabled = true;
     const result = await api("/api/admin/update/deploy", { method: "POST", body: "{}" });
@@ -608,7 +608,7 @@ $("#publish-staged-update").addEventListener("click", async () => {
     return;
   }
   if (!window.confirm(
-    "Validate the newest staged SentryLoom Setup, publish it, and queue it for every eligible managed endpoint?"
+    "Validate the newest staged Endpointward Setup, publish it, and queue it for every eligible managed endpoint?"
   )) return;
   try {
     button.disabled = true;

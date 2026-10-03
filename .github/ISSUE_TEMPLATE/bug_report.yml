@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible SentryLoom defect without sensitive data
+description: Report a reproducible Endpointward defect without sensitive data
 title: "[Bug]: "
 labels: ["bug", "triage"]
 body:
@@ -11,7 +11,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: SentryLoom version
+      label: Endpointward version
       placeholder: 0.16.0
     validations:
       required: true
@@ -31,7 +31,7 @@ body:
         - Endpoint dashboard
         - Native launcher or tray
         - Installer
-        - SentryLoom HQ
+        - Endpointward HQ
         - Threat intelligence
         - Documentation
         - Other

@@ -92,7 +92,7 @@ export async function readWindowsSecurityEvents(since) {
     "  Where-Object { $_.Level -le 3 -or $_.Id -in @(4103,4104,4688,4697,7045,1116,1117,5001,5007,3033,3077,106,140,141) } |",
     "  ForEach-Object {",
     "   $message = [string]$_.Message;",
-    "   $ownCollector = $log -eq 'Microsoft-Windows-PowerShell/Operational' -and ($message -match 'Get-WinEvent -FilterHashtable|Get-CimInstance Win32_Process|Get-NetFirewall(Profile|Rule)|Get-ScheduledTask.+ConvertTo-Json|SentryLoom|AegisOfflineAV|__cmdletization|Export-ModuleMember -Function|loading the extended type data file|Author\\s*=\\s*\"PowerShell\"' -or ($message -match 'Microsoft.PowerShell.Cmdletization.Cim.CimCmdletAdapter' -and $message -match 'ROOT/StandardCimv2'));",
+    "   $ownCollector = $log -eq 'Microsoft-Windows-PowerShell/Operational' -and ($message -match 'Get-WinEvent -FilterHashtable|Get-CimInstance Win32_Process|Get-NetFirewall(Profile|Rule)|Get-ScheduledTask.+ConvertTo-Json|Endpointward|AegisOfflineAV|__cmdletization|Export-ModuleMember -Function|loading the extended type data file|Author\\s*=\\s*\"PowerShell\"' -or ($message -match 'Microsoft.PowerShell.Cmdletization.Cim.CimCmdletAdapter' -and $message -match 'ROOT/StandardCimv2'));",
     "   if (-not $ownCollector) {",
     "    if ($message.Length -gt 2000) { $message = $message.Substring(0,2000) };",
     "    $items.Add([pscustomobject]@{log=$log;recordId=[long]$_.RecordId;eventId=[int]$_.Id;level=[int]$_.Level;at=$_.TimeCreated.ToUniversalTime().ToString('o');provider=[string]$_.ProviderName;message=$message})",

@@ -40,13 +40,13 @@ test("HQ destructive wipe confirmation is bound to the selected device name", ()
 
 test("Unix process, storage, and removable-media parsers are bounded and deterministic", () => {
   assert.deepEqual(parsePsOutput(
-    "42 1 1710000000 /usr/bin/node /usr/bin/node /opt/sentryloom/src/cli.js protect"
+    "42 1 1710000000 /usr/bin/node /usr/bin/node /opt/endpointward/src/cli.js protect"
   )[0], {
     pid: 42,
     parentPid: 1,
     name: "node",
     executablePath: "/usr/bin/node",
-    commandLine: "/usr/bin/node /opt/sentryloom/src/cli.js protect",
+    commandLine: "/usr/bin/node /opt/endpointward/src/cli.js protect",
     creationDate: "1710000000"
   });
   const disks = parseDfOutput(

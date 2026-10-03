@@ -8,7 +8,7 @@ const SOURCE_POLICY = Object.freeze({
         headers: {
           "Auth-Key": authKey,
           "Content-Type": "application/x-www-form-urlencoded",
-          "User-Agent": "SentryLoom-HQ/0.4"
+          "User-Agent": "Endpointward-HQ/0.4"
         },
         body: new URLSearchParams({ query: "recent_detections", hours: "168" })
       };
@@ -20,7 +20,7 @@ const SOURCE_POLICY = Object.freeze({
     request(authKey) {
       return {
         method: "GET",
-        headers: { "Auth-Key": authKey, "User-Agent": "SentryLoom-HQ/0.4" }
+        headers: { "Auth-Key": authKey, "User-Agent": "Endpointward-HQ/0.4" }
       };
     }
   },
@@ -33,7 +33,7 @@ const SOURCE_POLICY = Object.freeze({
         headers: {
           "Auth-Key": authKey,
           "Content-Type": "application/json",
-          "User-Agent": "SentryLoom-HQ/0.4"
+          "User-Agent": "Endpointward-HQ/0.4"
         },
         body: JSON.stringify({ query: "get_iocs", days: 7 })
       };
@@ -84,7 +84,7 @@ export class ThreatGateway {
   async fetchFresh(source, policy) {
     let authKey = await this.secretStore.getAbuseChAuthKey();
     if (!authKey) {
-      throw new Error("SentryLoom HQ does not have an abuse.ch Auth-Key configured");
+      throw new Error("Endpointward HQ does not have an abuse.ch Auth-Key configured");
     }
     try {
       const response = await this.fetch(policy.url, {

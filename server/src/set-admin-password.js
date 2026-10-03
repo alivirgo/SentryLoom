@@ -4,7 +4,7 @@ import path from "node:path";
 import { hashAdminPassword } from "./store.js";
 
 const configPath = path.resolve(process.argv[2] || "data/config.json");
-const password = String(process.env.SENTRYLOOM_HQ_SETUP_ADMIN_PASSWORD || "");
+const password = String(process.env.ENDPOINTWARD_HQ_SETUP_ADMIN_PASSWORD || "");
 if (password.length < 12 || password.length > 128) {
   throw new Error("The HQ administrator password must contain 12 to 128 characters");
 }
@@ -31,4 +31,4 @@ try {
   await fs.rm(temporary, { force: true }).catch(() => {});
   throw error;
 }
-console.log("SentryLoom HQ administrator password updated");
+console.log("Endpointward HQ administrator password updated");

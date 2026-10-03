@@ -1,6 +1,6 @@
-# SentryLoom HQ
+# Endpointward HQ
 
-SentryLoom HQ is the on-premises management service for SentryLoom endpoints.
+Endpointward HQ is the on-premises management service for Endpointward endpoints.
 It uses HTTPS, per-device bearer credentials, certificate pinning,
 administrator-approved enrollment requests, SQLite persistence, and
 allowlisted remote actions.
@@ -40,7 +40,7 @@ allowlisted HQ gateway over their authenticated, certificate-pinned device
 session. HQ adds the key only to the upstream abuse.ch request, enforces
 response-size and timeout limits, and caches responses to avoid a fleet-wide
 request burst. The client displays **Auth-Key is added and maintained by
-SentryLoom HQ** after HQ confirms configuration.
+Endpointward HQ** after HQ confirms configuration.
 
 DPAPI `LocalMachine` protection intentionally binds the secret ciphertext to
 the HQ Windows machine. After disaster recovery onto different hardware,
@@ -48,7 +48,7 @@ enter the key again instead of copying `hq-secrets.json`.
 
 ## Publish and deploy client updates
 
-Remote updates require clients running SentryLoom 0.16.0 or later. Install that
+Remote updates require clients running Endpointward 0.16.0 or later. Install that
 version normally once to bootstrap the local update agent. Future releases can
 then be installed without visiting the endpoint.
 
@@ -56,8 +56,8 @@ Build a release with your trusted Authenticode code-signing certificate, then
 publish the signed Setup executable from an elevated HQ PowerShell session:
 
 ```powershell
-.\Publish-SentryLoomUpdate.ps1 `
-  -SetupFile C:\Releases\SentryLoom-Setup-0.17.0.exe `
+.\Publish-EndpointwardUpdate.ps1 `
+  -SetupFile C:\Releases\Endpointward-Setup-0.17.0.exe `
   -ReleaseNotes 'Security engine and stability update'
 ```
 
@@ -80,11 +80,11 @@ commands remain allowlisted and cannot execute arbitrary commands.
 HQ server settings default the staging folder to:
 
 ```text
-Z:\Extreme Control\SentryLoom Updates
+Z:\Extreme Control\Endpointward Updates
 ```
 
 Place signed packages there using the required
-`SentryLoom-Setup-x.y.z.exe` filename. The settings page reports whether the
+`Endpointward-Setup-x.y.z.exe` filename. The settings page reports whether the
 HQ `SYSTEM` task can read the folder and which semantic version is newest.
 Select **Publish latest and deploy** to validate the newest file's embedded
 version and Authenticode signature, copy it atomically into the HQ repository,
@@ -92,7 +92,7 @@ write its SHA-256 manifest, and queue every eligible client.
 
 Drive mappings are session-specific. If `Z:` is a mapped network drive, use
 the share's UNC path in server settings, such as
-`\\fileserver\releases\SentryLoom Updates`. Grant both share and NTFS read
+`\\fileserver\releases\Endpointward Updates`. Grant both share and NTFS read
 permission to the HQ computer account (`DOMAIN\HQSERVER$`). Do not grant write
 access to HQ; the development/signing account should remain the only publisher
 that can place files in staging.
@@ -114,7 +114,7 @@ forward them.
 
 ## Initialize on the HQ Windows server
 
-Run `SentryLoom-HQ-Setup-0.5.0.exe` and provide the server's DNS/computer name.
+Run `Endpointward-HQ-Setup-0.5.0.exe` and provide the server's DNS/computer name.
 Setup installs prerequisites, initializes new servers, preserves existing data
 during upgrades, registers the self-restarting startup task, and asks for the
 administrator password with confirmation. On upgrade, the entered password
@@ -141,7 +141,7 @@ For a source installation, run PowerShell as Administrator:
 
 ```powershell
 cd .\server
-.\Initialize-SentryLoomHq.ps1 -PublicHost security-hq -RegisterStartupTask
+.\Initialize-EndpointwardHq.ps1 -PublicHost security-hq -RegisterStartupTask
 ```
 
 Save the generated administrator password and certificate SHA-256 fingerprint.
@@ -163,7 +163,7 @@ publish the service directly to the public internet.
   server-side credential after acknowledgement. Offline devices complete the
   workflow automatically when they reconnect.
 - Clients pin the TLS certificate fingerprint, including with a self-signed HQ certificate.
-- The server can queue only predefined SentryLoom actions; it has no shell-command API.
+- The server can queue only predefined Endpointward actions; it has no shell-command API.
 - Local protection continues if HQ is offline.
 
 ## Restart after an update
@@ -171,8 +171,8 @@ publish the service directly to the public internet.
 From an Administrator PowerShell window:
 
 ```powershell
-.\Restart-SentryLoomHq.ps1
+.\Restart-EndpointwardHq.ps1
 ```
 
-Alternatively, double-click `Restart-SentryLoomHq-Admin.bat`. It requests
+Alternatively, double-click `Restart-EndpointwardHq-Admin.bat`. It requests
 administrator permission automatically and displays the restart result.

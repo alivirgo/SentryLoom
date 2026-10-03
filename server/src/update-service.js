@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 
 const VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
 const HASH_PATTERN = /^[a-f0-9]{64}$/i;
-const SETUP_PATTERN = /^SentryLoom-Setup-(\d+\.\d+\.\d+)\.exe$/i;
+const SETUP_PATTERN = /^Endpointward-Setup-(\d+\.\d+\.\d+)\.exe$/i;
 const execFileAsync = promisify(execFile);
 
 export function compareVersions(left, right) {
@@ -34,7 +34,7 @@ function powershellPath() {
 
 export async function inspectAuthenticodePackage(file) {
   const command = [
-    "$item = Get-Item -LiteralPath $env:SENTRYLOOM_STAGED_SETUP -ErrorAction Stop;",
+    "$item = Get-Item -LiteralPath $env:ENDPOINTWARD_STAGED_SETUP -ErrorAction Stop;",
     "$signature = Get-AuthenticodeSignature -LiteralPath $item.FullName -ErrorAction Stop;",
     "[pscustomobject]@{",
     "version=([string]$item.VersionInfo.ProductVersion).Trim();",
@@ -55,7 +55,7 @@ export async function inspectAuthenticodePackage(file) {
     maxBuffer: 1024 * 1024,
     env: {
       ...process.env,
-      SENTRYLOOM_STAGED_SETUP: path.resolve(file)
+      ENDPOINTWARD_STAGED_SETUP: path.resolve(file)
     }
   });
   return JSON.parse(stdout);
@@ -100,10 +100,10 @@ function validateManifest(value) {
     throw new Error("The published client update has an invalid package size");
   }
   const fileName = path.basename(String(value.fileName || ""));
-  if (fileName !== value.fileName || !/^SentryLoom-Setup-\d+\.\d+\.\d+\.exe$/i.test(fileName)) {
+  if (fileName !== value.fileName || !/^Endpointward-Setup-\d+\.\d+\.\d+\.exe$/i.test(fileName)) {
     throw new Error("The published client update has an invalid package name");
   }
-  if (fileName.toLowerCase() !== `sentryloom-setup-${value.version}.exe`.toLowerCase()) {
+  if (fileName.toLowerCase() !== `endpointward-setup-${value.version}.exe`.toLowerCase()) {
     throw new Error("The published client update package name does not match its version");
   }
   if (!/^[a-f0-9]{40,64}$/i.test(String(value.signerThumbprint || ""))) {
@@ -188,7 +188,7 @@ export class UpdateService {
         accessible: false,
         latest: null,
         error: error.code === "ENOENT"
-          ? "The staging folder is not visible to the SentryLoom HQ service account."
+          ? "The staging folder is not visible to the Endpointward HQ service account."
           : String(error.message || error)
       });
     }
@@ -197,7 +197,7 @@ export class UpdateService {
   async publishLatest(stagingDirectory, options = {}) {
     const staged = await latestStagedSetup(stagingDirectory);
     if (!staged) {
-      throw new Error("No SentryLoom-Setup-x.y.z.exe file was found in the staging folder");
+      throw new Error("No Endpointward-Setup-x.y.z.exe file was found in the staging folder");
     }
     const inspect = options.inspect || inspectAuthenticodePackage;
     const signature = await inspect(staged.file);
@@ -214,7 +214,7 @@ export class UpdateService {
     }
 
     await fs.mkdir(this.directory, { recursive: true });
-    const fileName = `SentryLoom-Setup-${productVersion}.exe`;
+    const fileName = `Endpointward-Setup-${productVersion}.exe`;
     const destination = path.join(this.directory, fileName);
     const suffix = `${process.pid}.${crypto.randomBytes(6).toString("hex")}.tmp`;
     const temporaryPackage = `${destination}.${suffix}`;

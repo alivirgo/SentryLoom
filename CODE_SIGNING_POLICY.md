@@ -2,7 +2,7 @@
 
 ## Current status
 
-SentryLoom's first public preview installers are reproducible but unsigned.
+Endpointward's first public preview installers are reproducible but unsigned.
 Their GitHub release is explicitly marked as an unsigned preview and publishes
 SHA-256 checksums. They must not be represented as Authenticode-signed builds.
 
@@ -20,7 +20,7 @@ signed release pages will include the required statement:
 - Require manual release approval.
 - Timestamp every Authenticode signature.
 - Publish hashes and preserve a traceable source tag for every binary.
-- Sign only SentryLoom artifacts built from SentryLoom source.
+- Sign only Endpointward artifacts built from Endpointward source.
 
 ## Team roles
 
@@ -39,7 +39,7 @@ operating it.
 
 Optional network features and their destinations are documented in
 [PRIVACY.md](PRIVACY.md). There is no analytics, advertising, crash-reporting,
-or mandatory SentryLoom cloud service.
+or mandatory Endpointward cloud service.
 
 ## Certificate verification
 

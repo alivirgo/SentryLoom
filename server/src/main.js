@@ -5,7 +5,7 @@ import { applyHqSettings, createHqServer } from "./server.js";
 
 const serverDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const configPath = path.resolve(
-  process.env.SENTRYLOOM_HQ_CONFIG || path.join(serverDirectory, "data", "config.json")
+  process.env.ENDPOINTWARD_HQ_CONFIG || path.join(serverDirectory, "data", "config.json")
 );
 let config;
 let storedConfigText;
@@ -13,7 +13,7 @@ try {
   storedConfigText = await fs.readFile(configPath, "utf8");
   config = JSON.parse(storedConfigText);
 } catch (error) {
-  console.error(`SentryLoom HQ is not initialized. Run .\\Initialize-SentryLoomHq.ps1 first.\n${error.message}`);
+  console.error(`Endpointward HQ is not initialized. Run .\\Initialize-EndpointwardHq.ps1 first.\n${error.message}`);
   process.exit(1);
 }
 const base = path.dirname(configPath);
@@ -26,7 +26,7 @@ if (JSON.stringify(JSON.parse(storedConfigText)) !== JSON.stringify(config)) {
     flag: "wx"
   });
   await fs.rename(temporary, configPath);
-  console.log(`SentryLoom HQ configuration migrated to schema ${config.schemaVersion}.`);
+  console.log(`Endpointward HQ configuration migrated to schema ${config.schemaVersion}.`);
 }
 config.databasePath = path.resolve(base, config.databasePath);
 config.tls.pfxPath = path.resolve(base, config.tls.pfxPath);
@@ -35,7 +35,7 @@ config.secrets = {
 };
 config.updates = {
   directory: path.resolve(base, config.updates?.directory || "updates"),
-  stagingDirectory: config.updates?.stagingDirectory || "Z:\\Extreme Control\\SentryLoom Updates",
+  stagingDirectory: config.updates?.stagingDirectory || "Z:\\Extreme Control\\Endpointward Updates",
   autoDeploy: Boolean(config.updates?.autoDeploy)
 };
 

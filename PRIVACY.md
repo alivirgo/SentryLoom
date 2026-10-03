@@ -1,6 +1,6 @@
 # Privacy
 
-SentryLoom is local-first and has no analytics, advertising, tracking SDK,
+Endpointward is local-first and has no analytics, advertising, tracking SDK,
 mandatory account, or hosted telemetry service.
 
 ## Standalone endpoint
@@ -14,7 +14,7 @@ Network access occurs only for an operator-requested function:
   services;
 - resolving names through a filtering DNS provider the administrator
   explicitly selected;
-- checking and downloading an update from an explicitly enrolled SentryLoom HQ
+- checking and downloading an update from an explicitly enrolled Endpointward HQ
   server.
 
 Provider requests necessarily expose the endpoint's public IP address to that
@@ -36,11 +36,11 @@ The endpoint sends sanitized operational data to that HQ, including:
 It does not send file contents, quarantine contents, private keys, master keys,
 passwords, bearer tokens, feed credentials, or certificate private keys.
 
-## SentryLoom HQ
+## Endpointward HQ
 
 HQ stores enrolled-device records, sanitized telemetry, command history,
 administrator password hashes, TLS configuration, and update metadata in its
-local data directory. SentryLoom does not operate a central service that
+local data directory. Endpointward does not operate a central service that
 receives this information.
 
 HQ stores maintenance-password hashes, expiry/use policy, revocation state, and

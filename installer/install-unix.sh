@@ -7,9 +7,9 @@ if [[ "${EUID}" -ne 0 ]]; then
 fi
 
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-INSTALL_DIR="${SENTRYLOOM_INSTALL_DIR:-/opt/sentryloom}"
-DATA_DIR="${SENTRYLOOM_DATA_DIR:-/var/lib/sentryloom}"
-NODE_VERSION="${SENTRYLOOM_NODE_VERSION:-24.18.0}"
+INSTALL_DIR="${ENDPOINTWARD_INSTALL_DIR:-/opt/endpointward}"
+DATA_DIR="${ENDPOINTWARD_DATA_DIR:-/var/lib/endpointward}"
+NODE_VERSION="${ENDPOINTWARD_NODE_VERSION:-24.18.0}"
 OPERATING_SYSTEM="$(uname -s)"
 MACHINE="$(uname -m)"
 RUNTIME_DIR="${INSTALL_DIR}/runtime/node"
@@ -37,7 +37,7 @@ cleanup() {
 trap cleanup EXIT
 
 log() {
-  printf '[SentryLoom] %s\n' "$*"
+  printf '[Endpointward] %s\n' "$*"
 }
 
 install_ubuntu_dependencies() {
@@ -88,7 +88,7 @@ install_macos_dependencies() {
   fi
 
   # ClamAV is an optional second-opinion engine. Install it automatically when
-  # the administrator already manages this Mac with Homebrew. SentryLoom's
+  # the administrator already manages this Mac with Homebrew. Endpointward's
   # built-in scanner, quarantine, telemetry, and monitoring do not require it.
   local brew_bin=""
   local user_name=""
@@ -179,7 +179,7 @@ install_private_node() {
 
 write_dependency_report() {
   {
-    echo "SentryLoom dependency report"
+    echo "Endpointward dependency report"
     echo "Generated: $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
     echo "Operating system: ${OPERATING_SYSTEM} ${MACHINE}"
     echo "Private Node.js: $("${RUNTIME_DIR}/bin/node" --version)"
@@ -220,26 +220,26 @@ install -m 0644 "${SOURCE_DIR}/package.json" "${INSTALL_DIR}/package.json"
 chmod -R go-w "${INSTALL_DIR}"
 chmod 0700 "${DATA_DIR}"
 
-cat > /usr/local/bin/sentryloom <<EOF
+cat > /usr/local/bin/endpointward <<EOF
 #!/usr/bin/env bash
 export PATH="${RUNTIME_PATH}"
-export SENTRYLOOM_DATA_DIR="${DATA_DIR}"
+export ENDPOINTWARD_DATA_DIR="${DATA_DIR}"
 exec "${NODE_BIN}" "${INSTALL_DIR}/src/cli.js" "\$@"
 EOF
-chmod 0755 /usr/local/bin/sentryloom
+chmod 0755 /usr/local/bin/endpointward
 
 case "${OPERATING_SYSTEM}" in
   Linux)
-    cat > /etc/systemd/system/sentryloom.service <<EOF
+    cat > /etc/systemd/system/endpointward.service <<EOF
 [Unit]
-Description=SentryLoom Endpoint Security
+Description=Endpointward Endpoint Security
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
 Environment=PATH=${RUNTIME_PATH}
-Environment=SENTRYLOOM_DATA_DIR=${DATA_DIR}
+Environment=ENDPOINTWARD_DATA_DIR=${DATA_DIR}
 ExecStart=${NODE_BIN} ${INSTALL_DIR}/src/cli.js protect
 Restart=on-failure
 RestartSec=5
@@ -250,21 +250,21 @@ PrivateTmp=true
 WantedBy=multi-user.target
 EOF
     systemctl daemon-reload
-    systemctl enable --now sentryloom.service
+    systemctl enable --now endpointward.service
     ;;
   Darwin)
     mkdir -p "${DATA_DIR}/logs"
-    cat > /Library/LaunchDaemons/org.sentryloom.endpoint.plist <<EOF
+    cat > /Library/LaunchDaemons/org.endpointward.endpoint.plist <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-  <key>Label</key><string>org.sentryloom.endpoint</string>
+  <key>Label</key><string>org.endpointward.endpoint</string>
   <key>ProgramArguments</key><array>
     <string>${NODE_BIN}</string><string>${INSTALL_DIR}/src/cli.js</string><string>protect</string>
   </array>
   <key>EnvironmentVariables</key><dict>
     <key>PATH</key><string>${RUNTIME_PATH}</string>
-    <key>SENTRYLOOM_DATA_DIR</key><string>${DATA_DIR}</string>
+    <key>ENDPOINTWARD_DATA_DIR</key><string>${DATA_DIR}</string>
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
@@ -272,12 +272,12 @@ EOF
   <key>StandardErrorPath</key><string>${DATA_DIR}/logs/launchd-error.log</string>
 </dict></plist>
 EOF
-    launchctl bootout system/org.sentryloom.endpoint 2>/dev/null || true
-    launchctl bootstrap system /Library/LaunchDaemons/org.sentryloom.endpoint.plist
+    launchctl bootout system/org.endpointward.endpoint 2>/dev/null || true
+    launchctl bootstrap system /Library/LaunchDaemons/org.endpointward.endpoint.plist
     ;;
 esac
 
 write_dependency_report
 log "Installed with private Node.js $("${NODE_BIN}" --version)"
 log "Dependency report: ${DEPENDENCY_REPORT}"
-log "Run the dashboard with: sudo sentryloom dashboard"
+log "Run the dashboard with: sudo endpointward dashboard"

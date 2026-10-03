@@ -41,7 +41,7 @@ function hasFlag(name) {
 
 async function authorizeCriticalAction(engine, action) {
   await engine.authorizeMaintenance(
-    process.env.SENTRYLOOM_MAINTENANCE_PASSWORD,
+    process.env.ENDPOINTWARD_MAINTENANCE_PASSWORD,
     action
   );
 }
@@ -50,20 +50,20 @@ function printHelp() {
   console.log(`${APP_NAME} ${APP_VERSION}
 
 Usage:
-  sentryloom dashboard [--no-open] [--port 3210] [--page quarantine]
-  sentryloom quick|full|startup|processes|external [--json] [--no-quarantine]
-  sentryloom scan <file-or-directory> [--json] [--no-quarantine]
-  sentryloom protect [path ...]
-  sentryloom status [--json]
-  sentryloom quarantine list|restore|delete
-  sentryloom signatures status|trust|import
-  sentryloom update [all|clamav|malwarebazaar|urlhaus|feodotracker|threatfox|spamhaus-drop|misp-circl|misp-botvrij|lmd] [--force]
-  sentryloom ioc lookup <ip-domain-url>
-  sentryloom credentials import-env
-  sentryloom dns status|apply|restore
-  sentryloom firewall status|clear
-  sentryloom audit verify
-  sentryloom hq discover|enroll-env|status|disconnect|maintenance-authorize-env
+  endpointward dashboard [--no-open] [--port 3210] [--page quarantine]
+  endpointward quick|full|startup|processes|external [--json] [--no-quarantine]
+  endpointward scan <file-or-directory> [--json] [--no-quarantine]
+  endpointward protect [path ...]
+  endpointward status [--json]
+  endpointward quarantine list|restore|delete
+  endpointward signatures status|trust|import
+  endpointward update [all|clamav|malwarebazaar|urlhaus|feodotracker|threatfox|spamhaus-drop|misp-circl|misp-botvrij|lmd] [--force]
+  endpointward ioc lookup <ip-domain-url>
+  endpointward credentials import-env
+  endpointward dns status|apply|restore
+  endpointward firewall status|clear
+  endpointward audit verify
+  endpointward hq discover|enroll-env|status|disconnect|maintenance-authorize-env
 
 Scanning and signature verification happen locally. Network access is used only for an explicitly requested database update.`);
 }
@@ -270,12 +270,12 @@ async function main() {
       if (action === "discover") {
         console.log(JSON.stringify(await discoverHqServers(), null, 2));
       } else if (action === "probe-env") {
-        const serverUrl = process.env.SENTRYLOOM_HQ_URL;
-        if (!serverUrl) throw new Error("SENTRYLOOM_HQ_URL is required");
+        const serverUrl = process.env.ENDPOINTWARD_HQ_URL;
+        if (!serverUrl) throw new Error("ENDPOINTWARD_HQ_URL is required");
         const identity = await probeHq(serverUrl, {
-          fingerprint256: process.env.SENTRYLOOM_HQ_FINGERPRINT || undefined
+          fingerprint256: process.env.ENDPOINTWARD_HQ_FINGERPRINT || undefined
         });
-        const probeFile = process.env.SENTRYLOOM_HQ_PROBE_FILE;
+        const probeFile = process.env.ENDPOINTWARD_HQ_PROBE_FILE;
         if (probeFile) {
           fs.writeFileSync(probeFile, `${identity.fingerprint256}\n`, {
             encoding: "utf8",
@@ -285,27 +285,27 @@ async function main() {
         }
         console.log(JSON.stringify(identity, null, 2));
       } else if (action === "enroll-env") {
-        const serverUrl = process.env.SENTRYLOOM_HQ_URL;
-        const code = process.env.SENTRYLOOM_HQ_ENROLLMENT_CODE;
-        if (!serverUrl || !code) throw new Error("SENTRYLOOM_HQ_URL and SENTRYLOOM_HQ_ENROLLMENT_CODE are required");
+        const serverUrl = process.env.ENDPOINTWARD_HQ_URL;
+        const code = process.env.ENDPOINTWARD_HQ_ENROLLMENT_CODE;
+        if (!serverUrl || !code) throw new Error("ENDPOINTWARD_HQ_URL and ENDPOINTWARD_HQ_ENROLLMENT_CODE are required");
         const credentials = await enrollWithHq({
           serverUrl,
           code,
-          fingerprint256: process.env.SENTRYLOOM_HQ_FINGERPRINT,
-          trustOnFirstUse: !process.env.SENTRYLOOM_HQ_FINGERPRINT
+          fingerprint256: process.env.ENDPOINTWARD_HQ_FINGERPRINT,
+          trustOnFirstUse: !process.env.ENDPOINTWARD_HQ_FINGERPRINT
         });
         const engine = await new AntivirusEngine().initialize();
         await engine.updateConfig({ management: { enabled: true } });
         console.log(`Enrolled with ${credentials.hqName}`);
       } else if (action === "request-env") {
-        const serverUrl = process.env.SENTRYLOOM_HQ_URL || undefined;
-        const resultFile = process.env.SENTRYLOOM_HQ_RESULT_FILE;
+        const serverUrl = process.env.ENDPOINTWARD_HQ_URL || undefined;
+        const resultFile = process.env.ENDPOINTWARD_HQ_RESULT_FILE;
         const existing = await loadHqCredentials();
         const engine = await new AntivirusEngine().initialize();
         if (existing) {
           const requested = serverUrl
             ? normalizeHqUrl(serverUrl, {
-                allowHttp: process.env.SENTRYLOOM_ALLOW_INSECURE_HQ === "1"
+                allowHttp: process.env.ENDPOINTWARD_ALLOW_INSECURE_HQ === "1"
               })
             : existing.serverUrl;
           if (requested !== existing.serverUrl) {
@@ -327,7 +327,7 @@ async function main() {
         }
         const pending = await requestHqEnrollment({
           serverUrl,
-          fingerprint256: process.env.SENTRYLOOM_HQ_FINGERPRINT || undefined
+          fingerprint256: process.env.ENDPOINTWARD_HQ_FINGERPRINT || undefined
         });
         await engine.updateConfig({ management: { enabled: true } });
         if (resultFile) {
@@ -344,7 +344,7 @@ async function main() {
         const pending = await loadPendingHqEnrollment();
         if (!pending) throw new Error("No pending enrollment request was found");
         const result = await pollHqEnrollment(pending);
-        const resultFile = process.env.SENTRYLOOM_HQ_RESULT_FILE;
+        const resultFile = process.env.ENDPOINTWARD_HQ_RESULT_FILE;
         if (resultFile) {
           fs.writeFileSync(
             resultFile,
@@ -354,8 +354,8 @@ async function main() {
         }
         console.log(JSON.stringify({ status: result.status }, null, 2));
       } else if (action === "maintenance-authorize-env") {
-        const password = process.env.SENTRYLOOM_MAINTENANCE_PASSWORD;
-        const maintenanceAction = process.env.SENTRYLOOM_MAINTENANCE_ACTION || "uninstall";
+        const password = process.env.ENDPOINTWARD_MAINTENANCE_PASSWORD;
+        const maintenanceAction = process.env.ENDPOINTWARD_MAINTENANCE_ACTION || "uninstall";
         const engine = await new AntivirusEngine().initialize();
         await engine.authorizeMaintenance(password, maintenanceAction);
         console.log("Maintenance authorization accepted");
@@ -406,7 +406,7 @@ async function main() {
     case "ioc": {
       const action = args.shift();
       const value = args.shift();
-      if (action !== "lookup" || !value) throw new Error("Usage: sentryloom ioc lookup <ip-domain-url>");
+      if (action !== "lookup" || !value) throw new Error("Usage: endpointward ioc lookup <ip-domain-url>");
       const index = await openThreatIndex();
       try {
         console.log(JSON.stringify(index.lookupIoc(value), null, 2));
@@ -417,9 +417,9 @@ async function main() {
     }
     case "credentials": {
       const action = args.shift();
-      if (action !== "import-env") throw new Error("Usage: sentryloom credentials import-env");
-      const key = process.env.SENTRYLOOM_ABUSECH_KEY;
-      if (!key) throw new Error("SENTRYLOOM_ABUSECH_KEY is not set");
+      if (action !== "import-env") throw new Error("Usage: endpointward credentials import-env");
+      const key = process.env.ENDPOINTWARD_ABUSECH_KEY;
+      if (!key) throw new Error("ENDPOINTWARD_ABUSECH_KEY is not set");
       const engine = await new AntivirusEngine().initialize();
       await engine.saveThreatCredentials({ abuseChAuthKey: key });
       console.log("Threat-intelligence credential encrypted and stored");
@@ -470,9 +470,9 @@ async function main() {
 }
 
 main().catch((error) => {
-  const message = `SentryLoom error: ${error.message}`;
+  const message = `Endpointward error: ${error.message}`;
   console.error(message);
-  const failureLog = process.env.SENTRYLOOM_FAILURE_LOG;
+  const failureLog = process.env.ENDPOINTWARD_FAILURE_LOG;
   if (failureLog) {
     try {
       fs.writeFileSync(failureLog, `${message}\n`, {

@@ -9,7 +9,7 @@ published release. Older development builds may not receive backports.
 
 Use GitHub's **Security → Report a vulnerability** flow:
 
-https://github.com/alivirgo/SentryLoom/security/advisories/new
+https://github.com/alivirgo/Endpointward/security/advisories/new
 
 Do not open a public issue for an unpatched vulnerability. Include affected
 versions, impact, prerequisites, reproduction steps, and a minimal safe proof
@@ -22,7 +22,7 @@ public attribution.
 
 ## Use alongside Windows security
 
-SentryLoom does not disable Microsoft Defender, Windows Firewall, SmartScreen, UAC, Secure Boot, or BitLocker. Keep those controls enabled.
+Endpointward does not disable Microsoft Defender, Windows Firewall, SmartScreen, UAC, Secure Boot, or BitLocker. Keep those controls enabled.
 
 ## Implemented safeguards
 

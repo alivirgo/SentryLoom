@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace = "org.sentryloom.android"
+    namespace = "org.endpointward.android"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "org.sentryloom.android"
+        applicationId = "org.endpointward.android"
         minSdk = 26
         targetSdk = 36
         versionCode = 4
