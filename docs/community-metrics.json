@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "repository": "alivirgo/Endpointward",
+  "repository": "alivirgo/SentryLoom",
   "samples": [
     {
       "date": "2026-07-04",
@@ -459,6 +459,11 @@
     },
     {
       "date": "2026-10-03",
+      "stars": 3,
+      "contributors": 3
+    },
+    {
+      "date": "2026-10-04",
       "stars": 3,
       "contributors": 3
     }
